@@ -1,0 +1,498 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── NanumGothic (본문용) ── */
+@font-face {
+  font-family: 'NanumGothic';
+  src: url('/fonts/NanumGothicLight.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumGothic';
+  src: url('/fonts/NanumGothic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumGothic';
+  src: url('/fonts/NanumGothicBold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumGothic';
+  src: url('/fonts/NanumGothicExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── NanumMyeongjo (제목/세리프용) ── */
+@font-face {
+  font-family: 'NanumMyeongjo';
+  src: url('/fonts/NanumMyeongjo.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumMyeongjo';
+  src: url('/fonts/NanumMyeongjoBold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumMyeongjo';
+  src: url('/fonts/NanumMyeongjoExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ═══════════════════════════════════════════════════════
+   v27: 3가지 다크 테마 시스템
+   - 사용자가 제공한 두 샘플색 + 검정색 기반의 3개 어두운 테마
+     · midnight  : 블루-블랙  (#01030c 계열)
+     · charcoal  : 웜 차콜    (#1f1f1d 계열, 샘플 2)
+     · black     : 순수 블랙  (#000000)
+   - 세 테마 모두 "어두운" 계열이므로 텍스트는 밝게 유지 →
+     v26의 라이트/그레이 혼합으로 인한 깨짐 문제를 근본 해결
+   - 배경 표면 계단(bg→surface-deep)만 테마별로 재매핑하고
+     강조색·텍스트·테두리는 공통 유지
+   ═══════════════════════════════════════════════════════ */
+:root {
+  /* 기본(midnight) 토큰 — data-theme 미설정 시에도 안전 */
+  --bg: #01030c;
+  --bg2: #070b18;
+  --bg3: #0e1426;
+  --bg4: #161d33;
+  --surface: #0b1020;
+  --surface-deep: #000208;
+
+  --border: rgba(255, 255, 255, 0.07);
+  --border2: rgba(255, 255, 255, 0.13);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+
+  --text: #e8eaf0;
+  --text2: #9ba3b8;
+  --text3: #626880;
+
+  --accent: #6c8cff;
+  --accent2: #4a6cf7;
+  --gold: #e8b84b;
+  --teal: #3ecfb2;
+  --coral: #ff7066;
+  --purple: #a78bfa;
+  --green: #5ebd7c;
+  --pink: #ec4899;
+  --amber: #f59e0b;
+
+  --success: var(--green);
+  --warning: var(--gold);
+  --danger: var(--coral);
+  --info: var(--accent);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+}
+
+/* ── 테마 1: Midnight (블루-블랙 #01030c) ── */
+[data-theme="midnight"] {
+  --bg: #01030c;
+  --bg2: #070b18;
+  --bg3: #0e1426;
+  --bg4: #161d33;
+  --surface: #0b1020;
+  --surface-deep: #000208;
+}
+
+/* ── 테마 2: Charcoal (웜 차콜, 샘플 2 #1f1f1d) ── */
+[data-theme="charcoal"] {
+  --bg: #1f1f1d;
+  --bg2: #272725;
+  --bg3: #30302d;
+  --bg4: #3b3b37;
+  --surface: #2b2b28;
+  --surface-deep: #161614;
+}
+
+/* ── 테마 3: Black (순수 블랙) ── */
+[data-theme="black"] {
+  --bg: #000000;
+  --bg2: #0a0a0a;
+  --bg3: #141414;
+  --bg4: #1f1f1f;
+  --surface: #0f0f0f;
+  --surface-deep: #000000;
+}
+
+/* ═══════════════════════════════════════════════════════
+   테마 적용 레이어
+   앱 전반이 하드코딩 색상(bg-[#0d0f14] 등)을 사용하므로,
+   data-theme에 따라 해당 하드코딩 배경값을 토큰으로 재매핑한다.
+   세 테마 모두 다크 계열 → 텍스트/강조색은 건드리지 않는다.
+   ═══════════════════════════════════════════════════════ */
+
+/* 전환 애니메이션 */
+[data-theme] body,
+[data-theme] aside,
+[data-theme] main,
+[data-theme] header,
+[data-theme] nav,
+[data-theme] section,
+[data-theme] div {
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+/* 하드코딩 배경 hex → 테마 토큰 재매핑 (3개 테마 공통 적용) */
+[data-theme] .bg-\[\#0d0f14\] { background-color: var(--bg) !important; }
+[data-theme] .bg-\[\#0a0c10\] { background-color: var(--surface-deep) !important; }
+[data-theme] .bg-\[\#13161e\] { background-color: var(--bg2) !important; }
+[data-theme] .bg-\[\#1a1e2a\] { background-color: var(--bg3) !important; }
+[data-theme] .bg-\[\#222637\] { background-color: var(--bg4) !important; }
+[data-theme] .bg-\[\#1e2230\] { background-color: var(--surface) !important; }
+[data-theme] .bg-\[\#0f1117\] { background-color: var(--surface-deep) !important; }
+[data-theme] .bg-\[\#0f1118\] { background-color: var(--surface-deep) !important; }
+
+/* 그라데이션 정지점에 쓰인 배경 hex도 재매핑 */
+[data-theme] .to-\[\#13161e\] { --tw-gradient-to: var(--bg2) !important; }
+
+/* body 기본 배경 */
+[data-theme] body { background-color: var(--bg) !important; color: var(--text) !important; }
+
+
+body {
+  font-family: 'NanumGothic', 'IBM Plex Sans KR', sans-serif;
+  font-size: 15px; /* v5-2 기본값 */
+}
+
+/* 랜딩 페이지: 전체 글자 1포인트 축소 */
+[data-page="landing"] {
+  font-size: 14px;
+}
+
+::selection {
+  background: rgba(108, 140, 255, 0.3);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg4);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text3);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Clerk UI — 다크 테마 전역 오버라이드
+   팝오버(UserButton dropdown), 소셜 버튼, 카드 텍스트 등
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Clerk 카드/모달 공통 배경 ── */
+.cl-card,
+.cl-modalContent {
+  background-color: #13161e !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* ── 카드 내부 모든 텍스트 기본색 ── */
+.cl-card *,
+.cl-modalContent * {
+  color: inherit;
+}
+
+/* ── 헤더 텍스트 ── */
+.cl-headerTitle {
+  color: #e8eaf0 !important;
+  font-size: 19px !important;
+  font-weight: 700 !important;
+}
+.cl-headerSubtitle {
+  color: #9ba3b8 !important;
+}
+
+/* ── 소셜 버튼 (Google, GitHub) — 텍스트 안 보임 핵심 수정 ── */
+.cl-socialButtonsBlockButton {
+  background-color: #1a1e2a !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  border-radius: 10px !important;
+}
+.cl-socialButtonsBlockButton:hover {
+  background-color: #222637 !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+.cl-socialButtonsBlockButtonText {
+  color: #e8eaf0 !important;
+  font-weight: 500 !important;
+}
+.cl-socialButtonsBlockButtonArrow {
+  color: #9ba3b8 !important;
+}
+
+/* ── 구분선 ── */
+.cl-dividerLine { background-color: rgba(255, 255, 255, 0.07) !important; }
+.cl-dividerText { color: #626880 !important; }
+
+/* ── 폼 레이블 ── */
+.cl-formFieldLabel { color: #9ba3b8 !important; font-size: 12px !important; }
+
+/* ── 입력창 ── */
+.cl-formFieldInput {
+  background-color: #1a1e2a !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  color: #e8eaf0 !important;
+  font-size: 14px !important;
+  border-radius: 10px !important;
+}
+.cl-formFieldInput::placeholder { color: #626880 !important; }
+.cl-formFieldInput:focus {
+  border-color: #4a6cf7 !important;
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.2) !important;
+}
+.cl-formFieldInputShowPasswordButton { color: #9ba3b8 !important; }
+
+/* ── 기본 제출 버튼 ── */
+.cl-formButtonPrimary {
+  background-color: #4a6cf7 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+}
+.cl-formButtonPrimary:hover { background-color: #5d7dff !important; }
+
+/* ── 하단 링크/텍스트 ── */
+.cl-footerActionLink { color: #4a6cf7 !important; }
+.cl-footerActionLink:hover { color: #6c8cff !important; }
+.cl-footerActionText { color: #9ba3b8 !important; }
+
+/* ── 에러/알림 ── */
+.cl-formFieldErrorText { color: #ff7066 !important; }
+.cl-alertText { color: #ff7066 !important; }
+.cl-alert { background-color: rgba(255, 112, 102, 0.08) !important; }
+
+/* ── OTP / 인증 코드 입력 ── */
+.cl-otpCodeFieldInput {
+  background-color: #1a1e2a !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  color: #e8eaf0 !important;
+  font-size: 20px !important;
+  border-radius: 10px !important;
+}
+.cl-otpCodeFieldInput:focus { border-color: #4a6cf7 !important; }
+
+/* ── 이메일 미리보기 ── */
+.cl-identityPreviewText { color: #e8eaf0 !important; }
+.cl-identityPreviewEditButton { color: #4a6cf7 !important; }
+.cl-formResendCodeLink { color: #4a6cf7 !important; }
+
+/* ═══════════════════════════════════════════════════════
+   UserButton 팝오버 (사이드바 하단)
+   Manage account / Sign out 아이콘+텍스트 완전 수정
+   ═══════════════════════════════════════════════════════ */
+
+/* 팝오버 컨테이너 */
+.cl-userButtonPopoverCard {
+  background-color: #13161e !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6) !important;
+  padding: 6px !important;
+  min-width: 220px !important;
+}
+
+/* 사용자 이름 / 이메일 */
+.cl-userPreviewMainIdentifier {
+  color: #e8eaf0 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+.cl-userPreviewSecondaryIdentifier {
+  color: #9ba3b8 !important;
+  font-size: 11px !important;
+}
+
+/* 구분선 */
+.cl-userButtonPopoverActionsSeparator {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  margin: 4px 0 !important;
+}
+
+/* 액션 버튼 (Manage account / Sign out) */
+.cl-userButtonPopoverActionButton {
+  color: #e8eaf0 !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  transition: background-color 0.15s !important;
+}
+.cl-userButtonPopoverActionButton:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+/* 버튼 텍스트 */
+.cl-userButtonPopoverActionButtonText {
+  color: #e8eaf0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+/* 버튼 아이콘 */
+.cl-userButtonPopoverActionButtonIcon {
+  color: #9ba3b8 !important;
+  opacity: 1 !important;
+}
+.cl-userButtonPopoverActionButtonIcon svg {
+  color: #9ba3b8 !important;
+  fill: currentColor !important;
+}
+
+/* Sign out 버튼 강조 */
+.cl-userButtonPopoverActionButton:last-of-type .cl-userButtonPopoverActionButtonText {
+  color: #ff7066 !important;
+}
+.cl-userButtonPopoverActionButton:last-of-type .cl-userButtonPopoverActionButtonIcon {
+  color: #ff7066 !important;
+}
+.cl-userButtonPopoverActionButton:last-of-type:hover {
+  background-color: rgba(255, 112, 102, 0.08) !important;
+}
+
+/* 팝오버 하단 Clerk 브랜드 숨김 */
+.cl-userButtonPopoverFooter { display: none !important; }
+
+/* ── 아바타 박스 ── */
+.cl-avatarBox { width: 28px !important; height: 28px !important; }
+.cl-userButtonAvatarBox { width: 28px !important; height: 28px !important; }
+
+/* ── v11: 모바일 사이드바 슬라이드 애니메이션 ── */
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-left {
+  animation: slide-in-left 0.25s ease-out;
+}
+
+/* ── v30: 하단 슬라이드업 시트 애니메이션 ── */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* ── v11: scrollbar 숨기기 ── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ══════════════════════════════════════════
+   v21: 모바일 전용 수정 사항
+   ══════════════════════════════════════════ */
+
+/* 모바일에서 iOS safe-area 대응 */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* 모바일 터치 스크롤 개선 */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 모바일 탭 패널 내 overflow 처리 */
+@media (max-width: 1023px) {
+  /* 모바일 페이지 컨텐츠 스크롤 */
+  .page-content {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: calc(100vh - 3.5rem - env(safe-area-inset-bottom, 0px));
+  }
+
+  /* 그리드 레이아웃 모바일 최적화 */
+  .grid-cols-3-mobile-1 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 모바일에서 탭 텍스트 overflow 방지 */
+  .tab-scroll {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 텍스트 입력 영역 모바일 zoom 방지 (iOS) */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* 버튼/카드 터치 영역 최소 크기 */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* v21: 모바일 엔진 확장 패널 슬라이드 애니메이션 */
+@keyframes slide-down {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-down {
+  animation: slide-down 0.18s ease-out;
+}
+
+/* v21: 페이지별 스크롤 컨테이너 */
+.page-scroll-container {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}

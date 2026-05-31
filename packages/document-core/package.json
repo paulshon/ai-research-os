@@ -1,0 +1,11 @@
+{
+  "name": "@ai-research-os/document-core",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "description": "UODE — Unified Office Document Engine: 통합 오피스 문서 처리 엔진 (PDF/DOCX/XLSX/PPTX/HWP/HWPX) 타입·파이프라인·포맷 스펙",
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

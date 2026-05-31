@@ -1,0 +1,40 @@
+{
+  "name": "@ai-research-os/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Research OS — Electron Desktop App (Local First)",
+  "main": "dist/electron/main.js",
+  "scripts": {
+    "dev": "tsc -p tsconfig.json && electron .",
+    "build": "tsc -p tsconfig.json",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "clean": "rm -rf dist release node_modules"
+  },
+  "dependencies": {
+    "pdf-parse": "^1.1.1",
+    "@supabase/supabase-js": "^2.46.0",
+    "chokidar": "^4.0.0",
+    "electron-store": "^10.0.0",
+    "yjs": "^13.6.0",
+    "y-websocket": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.0"
+  },
+  "build": {
+    "appId": "com.ai-research-os.desktop",
+    "productName": "AI Research OS",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "package.json"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+    }
+  }
+}
