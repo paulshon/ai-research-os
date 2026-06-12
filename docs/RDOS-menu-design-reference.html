@@ -1,0 +1,1959 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RDOS — AI Research OS</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#090c10;color:#e2e8f0;font-family:'Noto Sans KR',sans-serif;font-size:14px;min-height:100vh}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#111}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+.app{display:flex;min-height:100vh}
+.sidebar{width:180px;background:#0d1117;border-right:1px solid #1e293b;display:flex;flex-direction:column;padding:16px 0;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar-logo{padding:8px 16px 16px;border-bottom:1px solid #1e293b;margin-bottom:8px}
+.sidebar-logo-title{font-size:15px;font-weight:700;color:#fff;letter-spacing:.5px}
+.sidebar-logo-sub{font-size:11px;color:#64748b;margin-top:2px}
+.sidebar-item{display:flex;align-items:center;gap:8px;padding:8px 12px;margin:1px 8px;border-radius:6px;cursor:pointer;color:#94a3b8;font-size:13px;transition:all .15s;position:relative}
+.sidebar-item:hover{background:#1e293b;color:#e2e8f0}
+.sidebar-item.active{background:#1e293b;color:#e2e8f0}
+.sidebar-item.active::after{content:'•';position:absolute;right:10px;color:#10b981;font-size:16px}
+.sidebar-icon{width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.main{flex:1;overflow:auto}
+.page{padding:32px 40px;max-width:1100px}
+.back-link{font-size:12px;color:#64748b;margin-bottom:20px;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.back-link:hover{color:#94a3b8}
+.page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px}
+.page-title-row{display:flex;align-items:center;gap:12px}
+.page-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700}
+.page-title{font-size:22px;font-weight:700;color:#f1f5f9}
+.page-meta{font-size:11px;color:#475569;margin-top:2px}
+.mission-progress{text-align:right}
+.mission-label{font-size:11px;color:#64748b}
+.mission-pct{font-size:20px;font-weight:700}
+.progress-bar{height:4px;background:#1e293b;border-radius:2px;margin:12px 0 20px;overflow:hidden}
+.progress-fill{height:100%;border-radius:2px;transition:width .4s}
+.page-desc{color:#94a3b8;font-size:14px;margin-bottom:24px;line-height:1.6}
+.section-title{font-size:13px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
+.goals-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:28px}
+.goal-card{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:14px;font-size:12px;color:#94a3b8;line-height:1.5}
+.goal-label{font-size:10px;font-weight:600;color:#475569;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.modules-list{display:flex;flex-direction:column;gap:8px;margin-bottom:24px}
+.module-item{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:16px 20px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:all .15s}
+.module-item:hover:not(.locked){border-color:#334155;background:#162032}
+.module-item.locked{opacity:.5;cursor:not-allowed}
+.module-num{width:28px;height:28px;border-radius:50%;background:#1e293b;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#64748b;flex-shrink:0}
+.module-num.done{background:#064e3b;color:#10b981}
+.module-num.active{background:#1e3a5f;color:#60a5fa}
+.module-info{flex:1}
+.module-title{font-size:14px;font-weight:500;color:#e2e8f0;margin-bottom:2px}
+.module-sub{font-size:12px;color:#64748b}
+.module-status{font-size:11px;font-weight:600;padding:3px 8px;border-radius:4px}
+.status-done{background:#064e3b;color:#10b981}
+.status-active{background:#1e3a5f;color:#60a5fa}
+.status-locked{background:#1e293b;color:#475569}
+.cta-btn{padding:10px 20px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none;font-family:inherit;transition:all .15s}
+.cta-btn:hover{transform:translateY(-1px)}
+.cta-btn.done{background:#064e3b;color:#10b981;cursor:default;transform:none}
+.kernel-reward{background:#0f1923;border:1px solid #1e293b;border-radius:8px;padding:16px 20px;margin-top:8px}
+.kernel-reward-title{font-size:11px;color:#64748b;margin-bottom:10px}
+.reward-tags{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.reward-tag{font-size:11px;padding:3px 10px;border-radius:99px;font-weight:500}
+.tag-xp{background:#1c2a1c;color:#4ade80;border:1px solid #166534}
+.tag-literacy{background:#1c2538;color:#93c5fd;border:1px solid #1e3a5f}
+.tag-knowledge{background:#2a1c38;color:#c4b5fd;border:1px solid #3730a3}
+.tag-alignment{background:#2a1c1c;color:#fca5a5;border:1px solid #7f1d1d}
+.tag-quest{background:#2a2010;color:#fcd34d;border:1px solid #78350f}
+.tag-analytics{background:#1a2a2a;color:#67e8f9;border:1px solid #155e75}
+.kernel-link{font-size:11px;color:#475569}
+.kernel-link span{color:#60a5fa}
+/* Dashboard */
+.dashboard-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:24px}
+.stat-card{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:18px}
+.stat-label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.stat-value{font-size:28px;font-weight:700;color:#f1f5f9}
+.stat-sub{font-size:12px;color:#64748b;margin-top:4px}
+.missions-panel{background:#111827;border:1px solid #1e293b;border-radius:10px;padding:20px;margin-bottom:20px}
+.mission-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #1e293b}
+.mission-row:last-child{border-bottom:none}
+.mission-row-icon{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.mission-row-info{flex:1}
+.mission-row-title{font-size:13px;font-weight:500;color:#e2e8f0}
+.mission-row-sub{font-size:11px;color:#64748b}
+.mission-row-pct{font-size:13px;font-weight:600}
+.badge-grid{display:flex;gap:10px;flex-wrap:wrap}
+.badge-item{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:10px 14px;font-size:12px;text-align:center}
+.badge-icon{font-size:20px;margin-bottom:4px}
+.badge-name{font-size:11px;color:#94a3b8}
+/* Lesson modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.modal{background:#0d1117;border:1px solid #1e293b;border-radius:12px;width:100%;max-width:700px;max-height:85vh;overflow-y:auto;display:flex;flex-direction:column}
+.modal-header{padding:20px 24px;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:#0d1117;z-index:10}
+.modal-title{font-size:16px;font-weight:600;color:#f1f5f9}
+.modal-close{background:none;border:none;color:#64748b;font-size:20px;cursor:pointer;padding:4px 8px;border-radius:4px}
+.modal-close:hover{background:#1e293b;color:#e2e8f0}
+.modal-body{padding:24px;flex:1}
+.lesson-section{margin-bottom:24px}
+.lesson-section-title{font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.lesson-section-title::after{content:'';flex:1;height:1px;background:#1e293b}
+.lesson-content{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:18px;line-height:1.7;color:#94a3b8;font-size:14px}
+.lesson-content h3{color:#e2e8f0;font-size:15px;margin-bottom:10px;font-weight:600}
+.lesson-content p{margin-bottom:12px}
+.lesson-content p:last-child{margin-bottom:0}
+.lesson-content .highlight{background:#1e293b;border-left:3px solid #10b981;padding:10px 14px;border-radius:0 6px 6px 0;margin:12px 0;font-size:13px;color:#cbd5e1}
+.lesson-content .example{background:#1a2535;border:1px solid #1e3a5f;border-radius:6px;padding:12px 14px;margin:12px 0;font-size:13px;color:#93c5fd}
+.lesson-content .term{color:#10b981;font-weight:600}
+.lesson-content ul{padding-left:18px;margin:8px 0}
+.lesson-content li{margin-bottom:6px;color:#94a3b8}
+.quiz-section{margin-top:8px}
+.quiz-q{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:18px;margin-bottom:12px}
+.quiz-q-text{font-size:14px;color:#e2e8f0;margin-bottom:14px;line-height:1.5;font-weight:500}
+.quiz-option{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:6px;cursor:pointer;margin-bottom:6px;border:1px solid #1e293b;transition:all .15s;font-size:13px;color:#94a3b8;line-height:1.4}
+.quiz-option:hover:not(.disabled){border-color:#334155;background:#162032;color:#e2e8f0}
+.quiz-option.selected{border-color:#2563eb;background:#1e3a5f;color:#e2e8f0}
+.quiz-option.correct{border-color:#10b981;background:#064e3b;color:#d1fae5}
+.quiz-option.incorrect{border-color:#ef4444;background:#450a0a;color:#fca5a5}
+.quiz-option.disabled{cursor:default}
+.quiz-radio{width:16px;height:16px;border-radius:50%;border:2px solid #475569;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center}
+.quiz-radio.checked{border-color:#3b82f6;background:#3b82f6}
+.quiz-radio.correct-r{border-color:#10b981;background:#10b981}
+.quiz-radio.incorrect-r{border-color:#ef4444;background:#ef4444}
+.quiz-feedback{font-size:12px;padding:8px 12px;border-radius:6px;margin-top:8px;line-height:1.5}
+.feedback-correct{background:#064e3b;color:#6ee7b7;border:1px solid #065f46}
+.feedback-incorrect{background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}
+.modal-footer{padding:16px 24px;border-top:1px solid #1e293b;display:flex;justify-content:flex-end;gap:10px;position:sticky;bottom:0;background:#0d1117}
+/* Growth roadmap */
+.level-list{display:flex;flex-direction:column;gap:8px}
+.level-item{background:#111827;border:1px solid #1e293b;border-radius:8px;padding:16px 20px;display:flex;align-items:center;gap:14px}
+.level-item.current{border-color:#d97706;background:#1c1500}
+.level-item.done{border-color:#065f46;background:#021a10}
+.level-dot{width:14px;height:14px;border-radius:50%;border:2px solid #334155;flex-shrink:0}
+.level-dot.current-d{border-color:#d97706;background:#d97706;box-shadow:0 0 0 3px #2a1a00}
+.level-dot.done-d{border-color:#10b981;background:#10b981}
+.level-info{flex:1}
+.level-title{font-size:14px;font-weight:600;color:#e2e8f0}
+.level-sub{font-size:12px;color:#64748b}
+.level-xp{font-size:13px;font-weight:600;color:#64748b}
+/* AI Tutor */
+.chat-container{display:flex;flex-direction:column;gap:12px;margin-bottom:20px;max-height:400px;overflow-y:auto;padding-right:4px}
+.chat-msg{max-width:85%}
+.chat-msg.user{align-self:flex-end}
+.chat-msg.ai{align-self:flex-start}
+.chat-bubble{padding:12px 16px;border-radius:10px;font-size:14px;line-height:1.6}
+.chat-bubble.user{background:#1e3a5f;color:#e2e8f0;border-radius:10px 10px 2px 10px}
+.chat-bubble.ai{background:#1e293b;color:#cbd5e1;border-radius:10px 10px 10px 2px}
+.chat-input-row{display:flex;gap:8px}
+.chat-input{flex:1;background:#111827;border:1px solid #1e293b;border-radius:8px;padding:10px 14px;color:#e2e8f0;font-size:14px;font-family:inherit;outline:none;resize:none}
+.chat-input:focus{border-color:#334155}
+.chat-send-btn{background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:10px 18px;cursor:pointer;font-size:14px;font-family:inherit;font-weight:600}
+.chat-send-btn:hover{background:#2563eb}
+.divider{height:1px;background:#1e293b;margin:20px 0}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ─── LESSON DATA ──────────────────────────────────────────────────
+const LESSONS = {
+  'research-basics': [
+    {
+      id: 'what-is-research',
+      title: '연구란 무엇인가',
+      subtitle: '학술 연구의 본질과 일상적 탐구와의 차이',
+      content: `
+        <h3>학술 연구(Academic Research)란?</h3>
+        <p>연구는 단순한 지식의 나열이 아닙니다. 그것은 하나의 <span class="term">정교한 논리 구조물</span>이며, 검증 가능한 질문에 체계적으로 답하는 과정입니다.</p>
+        <div class="highlight">핵심 원리: 연구는 "왜?"와 "어떻게?"에 체계적으로 답하는 학문적 탐구 활동입니다.</div>
+        <h3>일상적 탐구 vs 학술 연구</h3>
+        <ul>
+          <li><strong>일상적 탐구:</strong> 직관, 경험, 비공식적 관찰에 의존</li>
+          <li><strong>학술 연구:</strong> 체계적 방법, 재현 가능한 절차, 동료 검토(peer review)</li>
+        </ul>
+        <div class="example">예시: "사람들은 AI가 만든 예술을 좋아하는 것 같다" (일상) vs "AI 창작물에 대한 대중 인식 유형을 Q방법론으로 분석한다" (학술)</div>
+        <h3>논문의 8개 핵심 장</h3>
+        <p>모든 학술 논문은 각 장이 독립된 역할을 수행하면서도 전체 논리 사슬을 형성합니다:</p>
+        <ul>
+          <li>연구배경 → <span class="term">왜?</span> (why)</li>
+          <li>연구목적·문제 → <span class="term">무엇을?</span> (what)</li>
+          <li>이론적 배경 → <span class="term">어떤 틀로?</span> (with what lens)</li>
+          <li>문헌연구 → <span class="term">기존은 어땠나?</span> (what was done)</li>
+          <li>연구방법 → <span class="term">어떻게?</span> (how)</li>
+          <li>연구결과 → <span class="term">무엇이 나왔나?</span> (what was found)</li>
+          <li>논의 → <span class="term">왜 그런가?</span> (why and so what)</li>
+          <li>결론 → <span class="term">무엇을 남겼나?</span> (legacy)</li>
+        </ul>
+        <div class="highlight">핵심: 각 장의 역할이 일관성은 유지하되, 절대로 겹치면 안 됩니다.</div>
+      `,
+      quiz: [
+        {
+          q: '학술 연구와 일상적 탐구를 구분하는 가장 핵심적인 특성은 무엇인가요?',
+          options: ['더 많은 시간을 투자한다', '체계적 방법과 재현 가능한 절차를 사용한다', '전문 용어를 사용한다', '대학에서 수행된다'],
+          answer: 1,
+          explanation: '학술 연구는 체계적 방법, 재현 가능한 절차, 동료 검토를 통해 일상적 탐구와 구분됩니다.'
+        },
+        {
+          q: '논문에서 "왜 이 연구인가?"를 설득하는 장은 무엇인가요?',
+          options: ['연구방법', '연구결과', '연구배경', '결론'],
+          answer: 2,
+          explanation: '연구배경은 "왜?"(why)에 답하며, 거시적 변화에서 구체적 연구 공백으로 좁혀지는 깔때기 구조를 따릅니다.'
+        }
+      ]
+    },
+    {
+      id: 'research-question',
+      title: '연구문제·목적·질문',
+      subtitle: '세 요소의 위계와 상호 연결',
+      content: `
+        <h3>연구목적: 논문 전체의 나침반</h3>
+        <p>연구목적은 논문 전체 설계의 나침반입니다. <span class="term">무엇을(대상), 어떤 관점으로(how), 어떤 방향으로(direction)</span> 탐구하는지를 하나의 문장에 담아야 합니다.</p>
+        <div class="highlight">구조: 핵심 목적(1개) + 세부 목적(3~4개) + RQ 2~4개, 위계적 구조로 배치</div>
+        <h3>연구문제(RQ): 탐구 지도</h3>
+        <p>연구문제(Research Question)는 목적을 구체적·조작적 질문으로 분해한 탐구 지도입니다. 좋은 RQ는 "예/아니오"로 답하지 않으며, <span class="term">어떻게, 왜, 어떤 유형으로</span>의 형식을 갖습니다.</p>
+        <div class="example">
+          예시:<br/>
+          핵심 목적: 본 연구는 생성형 AI 창작에 대한 대중 인식을 분석하여 그 유형과 관계 구조를 규명한다.<br/>
+          RQ1(현상): 어떤 인식 유형이 있는가?<br/>
+          RQ2(관계): 유형 간 관계 구조는 어떠한가?<br/>
+          RQ3(의미): 이 구조의 인식론적 의미는 무엇인가?
+        </div>
+        <h3>연구문제와 연구목적의 차이</h3>
+        <ul>
+          <li><strong>연구목적:</strong> "AI 창작 인식 유형을 분석하여 해석 모델을 제시한다" (방향 선언)</li>
+          <li><strong>연구문제:</strong> "어떤 인식 유형이 존재하는가?" (구체적 질문)</li>
+          <li><strong>연구배경:</strong> "왜 이 연구가 필요한가?" (필요성 설득)</li>
+        </ul>
+        <div class="highlight">위계: 연구배경(why) → 연구목적(what) → 연구문제(how exactly)</div>
+      `,
+      quiz: [
+        {
+          q: '좋은 연구문제(RQ)의 형식으로 올바른 것은?',
+          options: ['"AI가 창작에 영향을 주는가?"', '"어떤 인식 유형이 존재하는가?"', '"AI 창작은 예술이다."', '"AI 창작물이 많이 증가했다."'],
+          answer: 1,
+          explanation: '좋은 RQ는 "예/아니오"로 답하지 않고 "어떻게, 왜, 어떤 유형으로"의 형식을 사용합니다.'
+        },
+        {
+          q: '연구목적과 연구문제의 관계를 올바르게 설명한 것은?',
+          options: ['연구문제가 연구목적을 포함한다', '연구목적이 연구문제를 구체화한다', '연구목적은 연구문제를 조작적 질문으로 분해한 것이다', '둘은 동일한 개념이다'],
+          answer: 2,
+          explanation: '연구목적은 큰 방향(나침반)이고, 연구문제는 목적을 구체적·조작적 질문으로 분해한 탐구 지도입니다.'
+        }
+      ]
+    },
+    {
+      id: 'good-research',
+      title: '좋은 연구의 조건',
+      subtitle: '독창성·실행가능성·가치도 검점',
+      content: `
+        <h3>좋은 연구문제의 3대 조건</h3>
+        <p>심사위원들은 연구문제가 다음 세 조건을 충족하는지 엄밀하게 평가합니다:</p>
+        <ul>
+          <li><span class="term">독창성(Originality):</span> 기존 연구에서 다루지 않았거나 새로운 관점을 제시하는가?</li>
+          <li><span class="term">실행가능성(Feasibility):</span> 주어진 시간·자원으로 실제로 수행 가능한가?</li>
+          <li><span class="term">가치도(Significance):</span> 학문적·실천적으로 의미 있는 기여를 하는가?</li>
+        </ul>
+        <div class="highlight">Research Gap: 기존 연구들이 다루지 않았거나 불충분하게 다룬 학문적 공백 영역</div>
+        <h3>Academic Funnel Structure (깔때기 구조)</h3>
+        <p>연구배경은 거시적 사회·기술 변화에서 출발하여 구체적인 연구 공백으로 좁혀지는 깔때기 구조를 따릅니다:</p>
+        <div class="example">
+          문단1(현상): 최근 생성형 AI의 급격한 발전은 예술 창작의 패러다임에 근본적 변화를 가져오고 있다.<br/>
+          문단2(문제): 그러나 이러한 확산에도 불구하고 AI 창작에 대한 대중 인식은 일관되지 않으며...<br/>
+          문단3(공백): 기존 연구는 기술적 성능에 집중하여 인식 구조 분석이 부족하다.<br/>
+          문단4(필요성): 따라서 본 연구는 AI 창작 인식 구조를 체계적으로 분석할 필요가 있다.
+        </div>
+        <h3>이론적 가치 vs 실천적 가치</h3>
+        <ul>
+          <li><strong>이론적 가치:</strong> 기존 이론을 확장하거나 새로운 개념 제시 → 학문적 기여</li>
+          <li><strong>실천적 가치:</strong> 현장·정책·산업에 적용 가능한 시사점 → 실용적 기여</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: 'Research Gap이란 무엇인가요?',
+          options: ['연구자가 모르는 분야', '기존 연구들이 다루지 않은 학문적 공백 영역', '연구 방법의 부족', '데이터의 부재'],
+          answer: 1,
+          explanation: 'Research Gap은 기존 연구들이 다루지 않았거나 불충분하게 다룬 학문적 공백 영역으로, 연구의 필요성을 정당화하는 핵심 개념입니다.'
+        },
+        {
+          q: '좋은 연구문제의 3대 조건이 아닌 것은?',
+          options: ['독창성(Originality)', '실행가능성(Feasibility)', '인기도(Popularity)', '가치도(Significance)'],
+          answer: 2,
+          explanation: '좋은 연구문제는 독창성·실행가능성·가치도를 충족해야 합니다. 인기도는 학술 연구의 평가 기준이 아닙니다.'
+        }
+      ]
+    }
+  ],
+
+  'paper-structure': [
+    {
+      id: 'imrad',
+      title: 'IMRaD 구조',
+      subtitle: 'Introduction-Methods-Results-Discussion',
+      content: `
+        <h3>IMRaD: 학술 논문의 표준 구조</h3>
+        <p>현대 학술 논문의 대부분은 <span class="term">IMRaD 구조</span>를 따릅니다. 이 구조는 독자가 연구를 논리적으로 따라갈 수 있도록 설계되었습니다.</p>
+        <div class="highlight">I(Introduction) → M(Methods) → R(Results) → aD(and Discussion)</div>
+        <h3>각 장의 핵심 기능</h3>
+        <ul>
+          <li><strong>서론(Introduction):</strong> 왜 이 연구를 했는가? — 연구 배경, 목적, 연구문제 제시</li>
+          <li><strong>방법(Methods):</strong> 어떻게 연구했는가? — 연구 설계, 자료 수집, 분석 방법</li>
+          <li><strong>결과(Results):</strong> 무엇을 발견했는가? — 사실만 제시, 해석 없이</li>
+          <li><strong>논의(Discussion):</strong> 이것이 무엇을 의미하는가? — 해석, 선행연구 비교, 함의</li>
+        </ul>
+        <div class="example">
+          자주 하는 실수: 결과(Results)에서 논의(Discussion)를 섞는 것.<br/>
+          연구결과: "세 가지 유형이 도출되었다." (✓ 사실)<br/>
+          논의: "이는 Boden의 이론과 연결되며 기존 연구를 확장한다." (✓ 해석)<br/>
+          혼합 (✗): "세 가지 유형이 도출되었는데, 이는 매우 흥미롭고..."
+        </div>
+        <h3>인문·사회과학 논문의 확장 구조</h3>
+        <p>인문·사회과학 논문에서는 IMRaD에 <span class="term">이론적 배경</span>과 <span class="term">문헌연구</span>가 추가되어 8장 구조로 확장됩니다:</p>
+        <ul>
+          <li>1. 연구배경 → 2. 연구목적·문제 → 3. 이론적 배경 → 4. 문헌연구</li>
+          <li>5. 연구방법 → 6. 연구결과 → 7. 논의 → 8. 결론</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: 'IMRaD에서 "aD"가 의미하는 것은?',
+          options: ['and Data', 'and Discussion', 'and Diagram', 'and Discipline'],
+          answer: 1,
+          explanation: 'IMRaD는 Introduction-Methods-Results-and Discussion의 약자입니다.'
+        },
+        {
+          q: '연구결과 장에서 해야 할 일과 하지 말아야 할 일을 올바르게 짝지은 것은?',
+          options: ['데이터 해석 ✓, 사실 제시 ✗', '사실 제시 ✓, 논의와 해석 ✗', '이론 연결 ✓, 통계 제시 ✗', '선행연구 비교 ✓, 결과 요약 ✗'],
+          answer: 1,
+          explanation: '연구결과는 데이터가 보여주는 사실만을 체계적으로 제시해야 합니다. 해석과 논의는 논의 장으로 유보합니다.'
+        }
+      ]
+    },
+    {
+      id: 'chapter-roles',
+      title: '각 장의 역할',
+      subtitle: '무엇을 어디에 쓰는가',
+      content: `
+        <h3>이론적 배경 vs 문헌연구: 헷갈리는 두 장</h3>
+        <p>많은 연구자가 이론적 배경과 문헌연구를 혼동합니다. 이 둘은 분명히 다른 역할을 합니다:</p>
+        <div class="highlight">
+          이론적 배경: "이 연구에서 사용할 분석 도구는 무엇인가?" → 렌즈(lens)<br/>
+          문헌연구: "이 분야에서 지금까지 어떤 연구가 이루어졌는가?" → 지형(landscape)
+        </div>
+        <h3>이론적 배경 7단계 구조</h3>
+        <ul>
+          <li>개념 문제 제기 → 개념 정의 → 이론 체계 정리</li>
+          <li>연구 동향 → 이론 비교·비판 → 개념 통합 → 분석 틀 도출</li>
+        </ul>
+        <div class="example">
+          일반 논문: 개념 설명 → 문헌 정리 → 연구문제 연결<br/>
+          해외 저널: 개념 문제 제기 → 이론 체계 분석 → 이론 비판 → 개념 통합 → 분석 틀 구축<br/>
+          → 이론적 배경이 "이론 구축 과정"으로 서술될 때 논문 수준이 크게 올라간다
+        </div>
+        <h3>논의 장: So what?</h3>
+        <p>심사위원이 논의 장에서 묻는 단 하나의 질문: <span class="term">"So what? 이 결과가 왜 중요한가?"</span></p>
+        <p>논의 장의 페이지 구성 비율(해외 유명 저널 기준):</p>
+        <ul>
+          <li>결과 해석: 40%</li>
+          <li>문헌 비교: 25%</li>
+          <li>이론적 의미: 20%</li>
+          <li>연구 기여: 10%</li>
+          <li>연구 한계: 5%</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '이론적 배경과 문헌연구의 가장 큰 차이는?',
+          options: ['이론적 배경은 더 길게 써야 한다', '이론적 배경은 분석 렌즈, 문헌연구는 선행연구 지형도다', '문헌연구는 더 오래된 연구만 포함한다', '이론적 배경은 선택 사항이다'],
+          answer: 1,
+          explanation: '이론적 배경은 연구의 분석 도구(렌즈)를, 문헌연구는 선행 연구의 지형(landscape)을 다룹니다.'
+        },
+        {
+          q: '해외 유명 저널에서 논의 장 중 가장 큰 비중을 차지하는 내용은?',
+          options: ['연구 한계(5%)', '이론적 의미(20%)', '결과 해석(40%)', '문헌 비교(25%)'],
+          answer: 2,
+          explanation: '논의 장에서는 결과 해석이 40%로 가장 큰 비중을 차지합니다.'
+        }
+      ]
+    },
+    {
+      id: 'abstract',
+      title: '초록 작성',
+      subtitle: '250단어 구조화 요약',
+      content: `
+        <h3>초록(Abstract)이란?</h3>
+        <p>초록은 논문 전체를 250단어 내외로 압축한 학문적 명함입니다. 많은 독자들이 초록만 읽고 논문 전체를 읽을지 결정합니다.</p>
+        <div class="highlight">초록 = 연구목적 + 방법 + 주요 결과 + 결론/함의</div>
+        <h3>초록의 4요소</h3>
+        <ul>
+          <li><span class="term">목적(Purpose):</span> 본 연구는 무엇을 분석하고자 하는가? (1~2문장)</li>
+          <li><span class="term">방법(Method):</span> 어떤 방법으로 연구했는가? (2~3문장)</li>
+          <li><span class="term">결과(Results):</span> 주요 발견은 무엇인가? (3~4문장)</li>
+          <li><span class="term">함의(Implications):</span> 어떤 이론적·실천적 기여를 하는가? (1~2문장)</li>
+        </ul>
+        <h3>장(章)과 초록의 차이</h3>
+        <p>초록은 결론 장과 다릅니다. 결론 장은 6단계 서술 구조를 갖는 독립된 장이지만, 초록은 전체 논문의 압축 요약입니다.</p>
+        <div class="example">
+          나쁜 초록: "본 연구는 AI에 대해 연구했다. 결과는 흥미로웠다."<br/>
+          좋은 초록: "본 연구는 Q방법론을 적용하여 한국 대학생의 생성형 AI 창작 인식 유형을 분석하였다. 분석 결과 도구적 수용형, 예술적 회의형, 윤리적 우려형 세 유형이 도출되었으며, 이는 Boden의 창작 유형론의 적용 범위를 확장한다."
+        </div>
+        <h3>초록에서 하지 말아야 할 것</h3>
+        <ul>
+          <li>인용(Citation) 사용 금지</li>
+          <li>약어를 정의 없이 사용하지 않기</li>
+          <li>새로운 정보를 추가하지 않기 (결론에서 다루지 않은 내용)</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '초록에서 포함해야 하는 4요소가 아닌 것은?',
+          options: ['연구목적', '연구방법', '주요 결과', '참고문헌 목록'],
+          answer: 3,
+          explanation: '초록은 연구목적, 방법, 결과, 함의를 포함합니다. 참고문헌 목록은 초록에 포함하지 않습니다.'
+        },
+        {
+          q: '초록 작성 시 절대 하지 말아야 할 것은?',
+          options: ['연구방법 명시', '주요 결과 제시', '논문 내 인용(Citation) 사용', '연구 함의 제시'],
+          answer: 2,
+          explanation: '초록에서는 인용(Citation)을 사용하지 않습니다. 초록은 독자가 논문 전체를 읽을지 판단하는 압축 요약이므로 독립적으로 이해 가능해야 합니다.'
+        }
+      ]
+    }
+  ],
+
+  'research-design': [
+    {
+      id: 'operationalize',
+      title: '연구문제 구체화',
+      subtitle: '추상적 관심을 검증가능한 질문으로',
+      content: `
+        <h3>조작적 정의(Operationalization)</h3>
+        <p><span class="term">조작적 정의</span>란 추상적 개념을 실제 연구에서 측정·분석 가능한 구체적 형태로 변환하는 것입니다.</p>
+        <div class="highlight">비유: 행복을 측정하려면 "최근 한 달간 웃은 횟수"처럼 구체화해야 한다.</div>
+        <h3>추상에서 구체로: 3단계</h3>
+        <ul>
+          <li><strong>1단계:</strong> 관심 현상 식별 → "AI 창작물에 대한 인식"</li>
+          <li><strong>2단계:</strong> 개념 정의 → "인식 = 유튜브 댓글에서 나타나는 언어적 표현 패턴"</li>
+          <li><strong>3단계:</strong> 측정 방법 선택 → "주제분석(Thematic Analysis) 적용"</li>
+        </ul>
+        <div class="example">
+          추상적: "학생들이 AI를 잘 활용하는가?"<br/>
+          구체화: "중학생의 생성형 AI 글쓰기 보조 도구 활용 빈도가 에세이 점수에 미치는 영향은 무엇인가?"
+        </div>
+        <h3>좋은 연구문제의 기준 (FINER)</h3>
+        <ul>
+          <li><span class="term">F</span>easible: 실행 가능한가?</li>
+          <li><span class="term">I</span>nteresting: 흥미로운가?</li>
+          <li><span class="term">N</span>ovel: 새로운가?</li>
+          <li><span class="term">E</span>thical: 윤리적인가?</li>
+          <li><span class="term">R</span>elevant: 관련성 있는가?</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '조작적 정의(Operationalization)란 무엇인가요?',
+          options: ['연구 방법을 선택하는 것', '추상적 개념을 측정 가능한 형태로 변환하는 것', '연구결과를 해석하는 것', '이론을 선택하는 것'],
+          answer: 1,
+          explanation: '조작적 정의는 추상적 개념을 실제 연구에서 측정·분석 가능한 구체적 형태로 변환하는 것입니다.'
+        },
+        {
+          q: '"학생들이 행복한가?"를 연구가능한 형태로 만들기 위해 필요한 것은?',
+          options: ['더 큰 표본 수집', '조작적 정의(측정 가능한 형태로 변환)', '더 많은 참고문헌', '이론적 배경 추가'],
+          answer: 1,
+          explanation: '"행복"이라는 추상적 개념을 "학교 생활 만족도 척도 점수" 같은 측정 가능한 형태로 변환해야 합니다.'
+        }
+      ]
+    },
+    {
+      id: 'variables',
+      title: '변수와 가설',
+      subtitle: '변수 유형과 가설 진술',
+      content: `
+        <h3>변수(Variable)의 종류</h3>
+        <p>연구에서 변수는 연구자가 측정·조작·통제하는 요소입니다:</p>
+        <ul>
+          <li><span class="term">독립변수(IV):</span> 원인 역할 → 연구자가 조작/선택하는 변수</li>
+          <li><span class="term">종속변수(DV):</span> 결과 역할 → 독립변수의 영향을 받는 변수</li>
+          <li><span class="term">매개변수:</span> 독립→종속 경로 사이에 위치</li>
+          <li><span class="term">조절변수:</span> 독립→종속 관계의 강도를 변화시킴</li>
+          <li><span class="term">통제변수:</span> 영향을 제거하기 위해 일정하게 유지하는 변수</li>
+        </ul>
+        <div class="example">
+          예시: AI 학습 도구 사용(IV) → 학업 성취도(DV)<br/>
+          학습 동기(조절변수): 동기가 높은 학생과 낮은 학생에서 효과가 다를 수 있음
+        </div>
+        <h3>가설(Hypothesis) 작성법</h3>
+        <p>가설은 변수 간 관계에 대한 <span class="term">검증 가능한 예측</span>입니다:</p>
+        <div class="highlight">
+          영가설(H₀): "AI 학습 도구 사용은 학업 성취도에 영향을 미치지 않는다."<br/>
+          대립가설(H₁): "AI 학습 도구를 사용하는 학생은 그렇지 않은 학생보다 학업 성취도가 높다."
+        </div>
+        <h3>질적 연구에서의 명제</h3>
+        <p>질적 연구는 가설 대신 <span class="term">연구 명제(Proposition)</span>나 잠정적 가정을 사용합니다:</p>
+        <ul>
+          <li>"AI 창작에 대한 인식은 사용자의 예술적 배경에 따라 다를 것이다"</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '독립변수(IV)와 종속변수(DV)의 관계를 올바르게 설명한 것은?',
+          options: ['독립변수는 결과, 종속변수는 원인이다', '독립변수는 원인, 종속변수는 결과다', '둘은 동일한 개념이다', '독립변수는 통제되는 변수다'],
+          answer: 1,
+          explanation: '독립변수(IV)는 원인 역할을 하며 연구자가 조작·선택하고, 종속변수(DV)는 독립변수의 영향을 받는 결과 역할을 합니다.'
+        },
+        {
+          q: '영가설(H₀)의 특징으로 올바른 것은?',
+          options: ['변수 간 관계가 있다고 주장한다', '변수 간 관계가 없다고 주장한다', '인과관계를 증명한다', '연구자의 기대를 표현한다'],
+          answer: 1,
+          explanation: '영가설(H₀)은 변수 간 차이나 관계가 없다는 주장으로, 연구는 이를 기각하거나 채택합니다.'
+        }
+      ]
+    },
+    {
+      id: 'sampling',
+      title: '표집과 타당도',
+      subtitle: '대표성·내적/외적 타당도',
+      content: `
+        <h3>표집(Sampling)</h3>
+        <p>표집은 연구 대상 모집단에서 연구 참여자를 선정하는 방법입니다:</p>
+        <ul>
+          <li><span class="term">무선 표집:</span> 모집단에서 무작위로 선택 → 외적 타당도 높음</li>
+          <li><span class="term">목적 표집(Purposive Sampling):</span> 연구 목적에 맞는 대상 의도적 선정 → 질적 연구에 많이 사용</li>
+          <li><span class="term">편의 표집:</span> 접근 가능한 대상 선정 → 편의성 높지만 대표성 낮음</li>
+        </ul>
+        <div class="example">
+          목적 표집 예시: AI 창작 인식 연구에서 "AI 예술 관련 댓글 100개 이상, 2023년 이후 업로드된 영상"이라는 기준으로 선정
+        </div>
+        <h3>타당도(Validity)</h3>
+        <div class="highlight">
+          내적 타당도: 연구 내부의 인과관계가 타당한가? (측정 도구의 정확성)<br/>
+          외적 타당도: 연구 결과를 다른 맥락으로 일반화할 수 있는가?
+        </div>
+        <h3>신뢰도(Reliability)</h3>
+        <p>신뢰도는 동일 조건에서 연구를 반복했을 때 일관된 결과가 나오는 정도입니다.</p>
+        <ul>
+          <li>코헨의 카파(Cohen's Kappa) κ ≥ .80 → Almost Perfect Agreement</li>
+          <li>삼각화(Triangulation): 여러 자료 출처·방법으로 결과를 교차 검증</li>
+        </ul>
+        <div class="example">
+          비유: 저울의 정확성.<br/>
+          타당도: 체중을 재려는데 체중을 제대로 재고 있는가? (측정 대상 일치)<br/>
+          신뢰도: 같은 사람을 반복해서 재면 같은 숫자가 나오는가? (일관성)
+        </div>
+      `,
+      quiz: [
+        {
+          q: '목적 표집(Purposive Sampling)이란?',
+          options: ['무작위로 표본을 선정하는 것', '연구 목적에 맞는 대상을 의도적으로 선정하는 것', '가장 쉽게 접근할 수 있는 대상을 선정하는 것', '전체 모집단을 조사하는 것'],
+          answer: 1,
+          explanation: '목적 표집은 연구 목적에 가장 잘 부합하는 대상을 연구자가 의도적으로 선정하는 방법으로, 질적 연구에서 많이 사용됩니다.'
+        },
+        {
+          q: '코헨의 카파(Cohen\'s Kappa) κ ≥ .80이 의미하는 것은?',
+          options: ['표본 크기가 충분함', '두 코더 간 일치도가 매우 높음(Almost Perfect)', '연구 결과가 유의미함', '외적 타당도가 높음'],
+          answer: 1,
+          explanation: 'κ ≥ .80은 두 평가자(코더)의 독립적 분류 결과가 Almost Perfect Agreement(거의 완벽한 일치) 수준임을 의미합니다.'
+        }
+      ]
+    }
+  ],
+
+  'research-methods': [
+    {
+      id: 'quantitative',
+      title: '양적 연구 개요',
+      subtitle: '측정·통계·일반화',
+      content: `
+        <h3>양적 연구(Quantitative Research)</h3>
+        <p>양적 연구는 수치화 가능한 데이터를 수집하여 통계적으로 분석하는 연구 방법입니다.</p>
+        <div class="highlight">핵심: 객관적 측정 → 통계 분석 → 일반화 가능한 결론</div>
+        <h3>양적 연구의 특징</h3>
+        <ul>
+          <li><span class="term">연역적 논리:</span> 이론에서 가설을 도출하고 검증</li>
+          <li><span class="term">대규모 표본:</span> 통계적 유의성 확보</li>
+          <li><span class="term">구조화된 도구:</span> 설문지, 척도, 검사 등</li>
+          <li><span class="term">통계 분석:</span> 기술통계, 추리통계, 회귀분석 등</li>
+        </ul>
+        <h3>연구 패러다임: 실증주의</h3>
+        <p>양적 연구는 <span class="term">실증주의(Positivism)</span>에 기반합니다: "세상에는 객관적 진실이 있고 측정 가능하다."</p>
+        <div class="example">
+          예시: AI 학습 도구가 학업 성취도에 미치는 영향<br/>
+          → 실험집단(AI 사용)과 통제집단(AI 미사용)을 비교<br/>
+          → t-검정 또는 ANOVA로 평균 차이 검증<br/>
+          → p < .05이면 통계적으로 유의미한 차이
+        </div>
+        <h3>내적 타당도 위협 요인</h3>
+        <ul>
+          <li>성숙 효과: 시간이 지나면서 자연 변화</li>
+          <li>역사 효과: 연구 기간 중 외부 사건 발생</li>
+          <li>선발 편향: 집단 간 사전 차이</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '양적 연구와 가장 잘 연결되는 연구 패러다임은?',
+          options: ['해석주의(Interpretivism)', '비판이론(Critical Theory)', '실증주의(Positivism)', '구성주의(Constructivism)'],
+          answer: 2,
+          explanation: '양적 연구는 실증주의에 기반합니다. "세상에는 객관적 진실이 있고 측정 가능하다"는 입장입니다.'
+        },
+        {
+          q: 'p < .05가 의미하는 것은?',
+          options: ['표본 크기가 5% 미만이다', '결과가 통계적으로 유의미하다', '연구 결과가 5% 정확하다', '오류율이 95%다'],
+          answer: 1,
+          explanation: 'p < .05는 관찰된 결과가 우연히 나타날 확률이 5% 미만임을 의미하며, 통계적 유의성의 기준입니다.'
+        }
+      ]
+    },
+    {
+      id: 'qualitative',
+      title: '질적 연구 개요',
+      subtitle: '의미·해석',
+      content: `
+        <h3>질적 연구(Qualitative Research)</h3>
+        <p>질적 연구는 인간의 경험, 의미, 맥락을 심층적으로 이해하는 연구 방법입니다.</p>
+        <div class="highlight">핵심: 귀납적 탐구 → 풍부한 기술 → 의미와 과정 이해</div>
+        <h3>질적 연구의 특징</h3>
+        <ul>
+          <li><span class="term">귀납적 논리:</span> 데이터에서 패턴을 찾아 이론 생성</li>
+          <li><span class="term">소규모 표본:</span> 깊이 있는 탐구 (포화 기준)</li>
+          <li><span class="term">비구조화 도구:</span> 인터뷰, 관찰, 문서 분석</li>
+          <li><span class="term">해석적 분석:</span> 주제분석, 근거이론, 현상학 등</li>
+        </ul>
+        <h3>연구 패러다임: 해석주의</h3>
+        <p>질적 연구는 <span class="term">해석주의(Interpretivism)</span>에 기반합니다: "진실은 사람마다 다르게 해석된다."</p>
+        <div class="example">
+          주제분석(Thematic Analysis) 6단계 (Braun & Clarke, 2006):<br/>
+          1. 친숙화 → 2. 초기 코드 → 3. 주제 탐색 → 4. 주제 검토 → 5. 주제 명명 → 6. 보고
+        </div>
+        <h3>이론적 포화(Theoretical Saturation)</h3>
+        <p>질적 연구에서 자료 수집을 중단할 기준: 더 이상 새로운 주제나 코드가 나타나지 않는 상태</p>
+        <div class="highlight">비유: 빨래통이 물로 가득 찬 상태 — 계속 부어도 더 이상 흡수되지 않음</div>
+      `,
+      quiz: [
+        {
+          q: '질적 연구에서 "이론적 포화(Theoretical Saturation)"란?',
+          options: ['충분한 참고문헌을 확보한 상태', '더 이상 새로운 주제가 나타나지 않는 상태', '통계적 유의성을 달성한 상태', '연구 참여자가 충분히 많은 상태'],
+          answer: 1,
+          explanation: '이론적 포화는 더 이상 새로운 주제나 코드가 나타나지 않는 상태로, 질적 연구에서 자료 수집을 중단할 수 있는 기준입니다.'
+        },
+        {
+          q: 'Braun & Clarke의 주제분석 6단계 중 첫 번째 단계는?',
+          options: ['초기 코드 생성', '주제 탐색', '친숙화(Familiarization)', '주제 검토'],
+          answer: 2,
+          explanation: 'Braun & Clarke(2006)의 주제분석 6단계는 친숙화 → 초기 코드 → 주제 탐색 → 주제 검토 → 주제 명명 → 보고 순서입니다.'
+        }
+      ]
+    },
+    {
+      id: 'method-selection',
+      title: '방법 선택 기준',
+      subtitle: '질문-방법 정합성',
+      content: `
+        <h3>연구방법 선택의 핵심 원칙</h3>
+        <p>심사위원이 방법론에서 가장 중요하게 보는 문장: <span class="term">"왜 이 방법인가?"</span></p>
+        <div class="highlight">
+          핵심 원리: 연구 패러다임 → 연구 설계(RQ-방법 대응) → 자료 수집 → 분석 방법 → 타당도 → 윤리
+        </div>
+        <h3>양적 vs 질적 선택 기준</h3>
+        <ul>
+          <li><strong>양적 연구 선택:</strong> 변수 간 관계나 차이를 측정하고 일반화하려 할 때</li>
+          <li><strong>질적 연구 선택:</strong> 경험의 의미와 과정을 심층 이해하려 할 때</li>
+          <li><strong>혼합 연구:</strong> 두 접근이 상호보완적으로 필요할 때</li>
+        </ul>
+        <div class="example">
+          연구문제 → 적합한 방법:<br/>
+          "얼마나?"(how much) → 양적 (설문, 측정, 실험)<br/>
+          "어떻게?"(how/process) → 질적 (인터뷰, 관찰)<br/>
+          "왜?"(why) → 질적 또는 혼합<br/>
+          "어떤 유형?"(what types) → 질적 (유형 도출)
+        </div>
+        <h3>심사위원이 방법론에서 확인하는 3가지</h3>
+        <ul>
+          <li><span class="term">방법 선택의 근거:</span> 왜 질적/양적/혼합 연구인가?</li>
+          <li><span class="term">분석의 재현 가능성:</span> 동일 데이터로 동일 결과를 얻을 수 있는가?</li>
+          <li><span class="term">타당도 처리:</span> 연구자 편향을 어떻게 최소화했는가?</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '"왜 이 연구방법을 선택했는가?"를 설명하는 것은 어느 장에 포함되어야 하는가?',
+          options: ['서론', '이론적 배경', '연구방법', '결론'],
+          answer: 2,
+          explanation: '연구방법 장에는 방법 선택의 철학적·방법론적 정당화가 반드시 포함되어야 합니다. 특히 해외 유명저널에서 가장 중요하게 봅니다.'
+        },
+        {
+          q: '"AI 창작을 경험한 예술가들이 이를 어떻게 의미화하는가?"에 가장 적합한 방법은?',
+          options: ['대규모 설문조사(양적)', '심층 인터뷰(질적)', 'A/B 테스트(실험)', '메타분석(통계)'],
+          answer: 1,
+          explanation: '"어떻게 의미화하는가?"는 의미와 경험에 대한 질문으로, 심층 인터뷰 등 질적 방법이 가장 적합합니다.'
+        }
+      ]
+    }
+  ],
+
+  'paper-reading': [
+    {
+      id: 'skimming',
+      title: '초록-결론 먼저 읽기',
+      subtitle: '빠른 구조 파악',
+      content: `
+        <h3>효율적 논문 읽기 전략</h3>
+        <p>숙련된 연구자는 논문을 처음부터 끝까지 읽지 않습니다. <span class="term">초록과 결론을 먼저 읽어 전체 구조를 파악</span>하고, 이후 필요한 부분을 선택적으로 깊이 읽습니다.</p>
+        <div class="highlight">읽기 순서: 초록 → 결론 → 서론 → 방법 → 결과 → 논의</div>
+        <h3>초록에서 파악해야 할 것</h3>
+        <ul>
+          <li>연구문제: 이 논문이 답하려는 질문은?</li>
+          <li>연구방법: 어떤 방법을 사용했는가?</li>
+          <li>핵심 결과: 무엇을 발견했는가?</li>
+          <li>기여: 왜 이 연구가 중요한가?</li>
+        </ul>
+        <div class="example">
+          결론을 먼저 읽으면:<br/>
+          - 연구의 최종 메시지 파악<br/>
+          - 이론적·실천적 기여 확인<br/>
+          - 연구 한계와 후속 연구 방향 확인<br/>
+          → 이후 중간 장들을 선택적으로 읽을 수 있음
+        </div>
+        <h3>논문 읽기의 목적별 전략</h3>
+        <ul>
+          <li><strong>관련성 파악:</strong> 초록만 읽기 (30초)</li>
+          <li><strong>개요 파악:</strong> 초록 + 결론 읽기 (5분)</li>
+          <li><strong>방법 검토:</strong> 연구방법 장 집중 읽기</li>
+          <li><strong>비판적 검토:</strong> 전문 읽기 (논의 + 한계 중점)</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '효율적인 논문 읽기 전략으로 가장 적합한 순서는?',
+          options: ['서론 → 방법 → 결과 → 논의', '초록 → 결론 → 서론 → 방법 → 결과 → 논의', '결론 → 초록 → 방법 → 결과', '무조건 처음부터 끝까지 읽는다'],
+          answer: 1,
+          explanation: '초록과 결론을 먼저 읽어 전체 구조와 핵심 주장을 파악한 뒤, 필요한 부분을 선택적으로 깊이 읽는 것이 효율적입니다.'
+        },
+        {
+          q: '논문의 관련성을 빠르게 파악하기 위한 최소한의 읽기는?',
+          options: ['결론만 읽기', '초록만 읽기', '서론만 읽기', '목차만 보기'],
+          answer: 1,
+          explanation: '초록은 논문 전체를 압축한 요약으로, 30초~1분 내에 이 논문이 내 연구와 관련이 있는지 판단할 수 있습니다.'
+        }
+      ]
+    },
+    {
+      id: 'evidence',
+      title: '근거 평가',
+      subtitle: '데이터가 주장을 지지하는가',
+      content: `
+        <h3>주장과 근거의 관계</h3>
+        <p>비판적 논문 읽기의 핵심은 <span class="term">저자의 주장이 제시된 근거로 충분히 지지되는가</span>를 평가하는 것입니다.</p>
+        <div class="highlight">
+          연구결과(결과): "분석 결과 세 가지 유형이 도출되었다." (사실 제시)<br/>
+          논의(해석): "이 세 유형은 Boden의 창작 이론과 연결된다." (근거 기반 해석)
+        </div>
+        <h3>근거 평가 체크리스트</h3>
+        <ul>
+          <li>표본이 연구문제에 적합한가? (대표성)</li>
+          <li>측정 도구가 개념을 정확히 측정하는가? (타당도)</li>
+          <li>분석 방법이 데이터 유형에 맞는가?</li>
+          <li>결론이 결과에서 논리적으로 도출되는가?</li>
+          <li>대안적 설명 가능성을 논의했는가?</li>
+        </ul>
+        <div class="example">
+          약한 근거: "5명을 인터뷰한 결과 모든 사람이 AI를 긍정적으로 본다." → 표본이 너무 작고 선발 편향 가능<br/>
+          강한 근거: "30명의 목적 표집 인터뷰 + 이론적 포화 확인 + 두 연구자의 교차 분석(κ=.83)"
+        </div>
+        <h3>통계 수치 해석 기본</h3>
+        <ul>
+          <li>p-value: 결과의 통계적 유의성 (p < .05)</li>
+          <li>효과 크기(Effect Size): 실질적 중요성 (Cohen's d)</li>
+          <li>신뢰구간(CI): 추정치의 불확실성 범위</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '근거 평가에서 "타당도 확인"이란?',
+          options: ['표본 수가 충분한지 확인', '측정 도구가 측정하려는 개념을 정확히 측정하는지 확인', 'p-value가 .05 미만인지 확인', '참고문헌 수가 충분한지 확인'],
+          answer: 1,
+          explanation: '타당도 확인은 측정 도구가 실제로 측정하려는 개념을 정확히 측정하고 있는지를 평가하는 것입니다.'
+        },
+        {
+          q: '다음 중 근거로서 가장 설득력 있는 것은?',
+          options: ['"많은 사람들이 동의한다"', '"5명을 인터뷰했다"', '"30명의 목적 표집 + 이론적 포화 + 두 연구자 교차 분석(κ=.83)"', '"다수의 선행연구가 지지한다"'],
+          answer: 2,
+          explanation: '구체적인 표집 방법, 포화 확인, 코더 신뢰도까지 제시된 근거가 가장 설득력 있습니다.'
+        }
+      ]
+    },
+    {
+      id: 'critical-questions',
+      title: '비판적 질문 만들기',
+      subtitle: '리뷰어의 시선',
+      content: `
+        <h3>비판적 읽기란?</h3>
+        <p>비판적 읽기는 논문을 수동적으로 받아들이지 않고, <span class="term">리뷰어(심사위원)의 시선</span>으로 적극적으로 질문하며 읽는 것입니다.</p>
+        <div class="highlight">핵심 질문: "이 연구는 주장하는 바를 실제로 입증했는가?"</div>
+        <h3>리뷰어가 하는 5가지 질문</h3>
+        <ul>
+          <li><span class="term">연구문제:</span> 이 질문은 학문적으로 중요한가? 이미 연구된 것은 아닌가?</li>
+          <li><span class="term">방법:</span> 이 방법이 이 연구문제에 적합한가? 왜 이 방법인가?</li>
+          <li><span class="term">결과:</span> 결과가 연구문제에 직접 답하는가? 대안적 해석은 없는가?</li>
+          <li><span class="term">논의:</span> 선행연구와의 비교가 충분한가? So what?</li>
+          <li><span class="term">한계:</span> 연구자가 자신의 한계를 인식하고 있는가?</li>
+        </ul>
+        <div class="example">
+          읽으면서 여백에 메모하기:<br/>
+          "왜 이 표본인가?" / "이 가정이 타당한가?" / "다른 설명은 없을까?" / "이 결론은 데이터에서 지지되는가?"
+        </div>
+        <h3>성찰성(Reflexivity)</h3>
+        <p>연구자 자신의 배경과 관점이 연구에 미치는 영향을 인식하고 반성하는 것입니다. 좋은 논문은 성찰성을 명시적으로 다룹니다.</p>
+      `,
+      quiz: [
+        {
+          q: '비판적 논문 읽기의 핵심 질문은?',
+          options: ['이 논문이 몇 페이지인가?', '이 연구는 주장하는 바를 실제로 입증했는가?', '저자가 유명한가?', '참고문헌이 최신인가?'],
+          answer: 1,
+          explanation: '비판적 읽기의 핵심은 "이 연구가 주장하는 바를 실제 데이터와 방법으로 입증했는가?"를 평가하는 것입니다.'
+        },
+        {
+          q: '성찰성(Reflexivity)이 중요한 이유는?',
+          options: ['논문 길이를 늘리기 위해', '연구자 편향이 연구에 미치는 영향을 인식하고 최소화하기 위해', '심사위원을 만족시키기 위해', '더 많은 참고문헌을 인용하기 위해'],
+          answer: 1,
+          explanation: '성찰성은 연구자 자신의 배경·관점·편견이 연구에 미치는 영향을 인식하고 반성하는 것으로, 연구의 신뢰성을 높입니다.'
+        }
+      ]
+    }
+  ],
+
+  'apa': [
+    {
+      id: 'in-text',
+      title: '본문 내 인용',
+      subtitle: '(저자, 연도) 규칙',
+      content: `
+        <h3>APA 7판 본문 내 인용 규칙</h3>
+        <p>APA 스타일에서 본문 내 인용은 <span class="term">(저자 성, 연도)</span> 형식을 사용합니다.</p>
+        <div class="highlight">
+          기본 형식: (Kim, 2023) 또는 Kim(2023)에 따르면<br/>
+          두 저자: (Kim & Lee, 2023)<br/>
+          세 명 이상: (Kim et al., 2023)
+        </div>
+        <h3>인용 유형</h3>
+        <ul>
+          <li><span class="term">저자 중심 인용:</span> Kim(2023)은 AI 창작이 세 유형으로 분류된다고 주장했다.</li>
+          <li><span class="term">정보 중심 인용:</span> AI 창작은 세 유형으로 분류된다(Kim, 2023).</li>
+          <li><span class="term">직접 인용:</span> "AI 창작은 새로운 패러다임이다"(Kim, 2023, p. 45). — 페이지 번호 필수</li>
+        </ul>
+        <div class="example">
+          나쁜 예: Kim(2023)은 AI에 대해 연구했다.<br/>
+          좋은 예: Kim(2023)은 생성형 AI 창작에 대한 대중 인식이 도구적 수용, 예술적 회의, 윤리적 우려 세 유형으로 구분됨을 발견했다.
+        </div>
+        <h3>2차 인용 (원전을 직접 읽지 못한 경우)</h3>
+        <p>가능하면 원전을 직접 인용하세요. 불가피한 경우: Boden(1990, as cited in Kim, 2023)</p>
+      `,
+      quiz: [
+        {
+          q: 'APA 7판에서 세 명 이상 저자의 본문 내 인용 형식은?',
+          options: ['(Kim, Lee, Park, 2023)', '(Kim et al., 2023)', '(Kim, Lee et al., 2023)', '(Kim 외, 2023)'],
+          answer: 1,
+          explanation: 'APA 7판에서 세 명 이상의 저자는 첫 번째 저자 성 다음에 "et al."을 붙여 (Kim et al., 2023) 형식으로 인용합니다.'
+        },
+        {
+          q: '직접 인용 시 반드시 포함해야 하는 것은?',
+          options: ['저자의 소속 기관', '페이지 번호', '논문 제목', 'DOI 번호'],
+          answer: 1,
+          explanation: 'APA에서 직접 인용(큰따옴표 사용)은 반드시 페이지 번호를 포함해야 합니다: (Kim, 2023, p. 45)'
+        }
+      ]
+    },
+    {
+      id: 'references',
+      title: '참고문헌 목록',
+      subtitle: '저자-연도-제목-출처',
+      content: `
+        <h3>APA 7판 참고문헌 기본 구조</h3>
+        <div class="highlight">저자. (연도). 제목. 출처.</div>
+        <h3>유형별 참고문헌 형식</h3>
+        <ul>
+          <li><span class="term">학술 저널 논문:</span><br/>
+            Kim, J. (2023). AI creativity perception types. <em>Journal of Educational Technology</em>, 45(2), 123–145.
+          </li>
+          <li><span class="term">단행본(책):</span><br/>
+            Kim, J., & Lee, S. (2022). <em>Research methods in education</em> (3rd ed.). Publisher.
+          </li>
+          <li><span class="term">온라인 자료:</span><br/>
+            Kim, J. (2023). <em>AI in education</em>. Website Name. URL
+          </li>
+        </ul>
+        <div class="example">
+          흔한 실수:<br/>
+          ✗ Kim, Jihun (2023). AI Research. Journal, 45, 123-145.<br/>
+          ✓ Kim, J. (2023). AI creativity perception types among Korean students. <em>Korean Journal of Educational Technology</em>, 45(2), 123–145.
+        </div>
+        <h3>참고문헌 목록 규칙</h3>
+        <ul>
+          <li>알파벳순 정렬 (저자 성 기준)</li>
+          <li>두 번째 줄부터 들여쓰기 (hanging indent)</li>
+          <li>저널명과 권(volume)을 이탤릭체로</li>
+          <li>두 자리 수 이상 페이지: 123–145 (en dash 사용)</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: 'APA 7판 학술지 논문 참고문헌의 올바른 기본 구조는?',
+          options: ['제목 (연도). 저자. 출처.', '저자. (연도). 제목. 출처.', '저자. 제목. 출처. (연도).', '연도. 저자. 제목. 출처.'],
+          answer: 1,
+          explanation: 'APA 7판 참고문헌의 기본 구조는 "저자. (연도). 제목. 출처." 순서입니다.'
+        },
+        {
+          q: '참고문헌 목록의 정렬 기준은?',
+          options: ['연도순(오래된 것부터)', '저자 성 알파벳순', '제목 가나다순', '인용 횟수순'],
+          answer: 1,
+          explanation: 'APA 참고문헌 목록은 저자 성(Last name)의 알파벳순으로 정렬합니다.'
+        }
+      ]
+    },
+    {
+      id: 'doi',
+      title: 'DOI·전자자료',
+      subtitle: '온라인 출처 표기',
+      content: `
+        <h3>DOI (Digital Object Identifier)</h3>
+        <p><span class="term">DOI</span>는 학술 자료에 부여된 고유 식별 번호로, URL과 달리 영구적으로 유효합니다.</p>
+        <div class="highlight">형식: https://doi.org/10.XXXX/XXXXXXX</div>
+        <h3>DOI 포함 논문 인용</h3>
+        <p>APA 7판에서 DOI가 있으면 반드시 포함합니다:</p>
+        <div class="example">
+          Kim, J. (2023). AI creativity perception types. <em>Korean Journal of Educational Technology</em>, 45(2), 123–145. https://doi.org/10.1234/kjet.2023.123
+        </div>
+        <h3>DOI 없는 온라인 자료</h3>
+        <ul>
+          <li>DOI가 없는 경우 → URL을 대신 포함</li>
+          <li>검색 날짜는 내용이 변경될 수 있는 경우에만 포함 (위키피디아 등)</li>
+          <li>사라진 링크 → 가능하면 Wayback Machine 아카이브 URL 사용</li>
+        </ul>
+        <h3>기관·보고서·정부 자료</h3>
+        <div class="example">
+          Ministry of Education. (2023). <em>2023 AI education implementation plan</em>. https://www.moe.go.kr/report
+        </div>
+        <h3>APA 7판 주요 변경사항</h3>
+        <ul>
+          <li>저자 최대 20명까지 모두 표기 (6판은 6명 후 et al.)</li>
+          <li>장소(city, state) 삭제</li>
+          <li>출판사 이름만 표기 (Inc., Ltd., Publishers 등 제외)</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: 'APA 7판에서 DOI가 있는 논문의 참고문헌에 DOI를 포함해야 하는가?',
+          options: ['선택 사항이다', '반드시 포함해야 한다', 'DOI 대신 URL을 사용한다', '생략해도 된다'],
+          answer: 1,
+          explanation: 'APA 7판에서 DOI가 있는 경우 반드시 https://doi.org/XXXX 형식으로 포함해야 합니다.'
+        },
+        {
+          q: 'APA 7판에서 6판과 달라진 주요 변경사항은?',
+          options: ['저자 성을 이니셜로 표기', '저자 최대 20명까지 모두 표기', '연도를 맨 뒤에 표기', '제목을 모두 이탤릭체로'],
+          answer: 1,
+          explanation: 'APA 7판에서는 저자가 최대 20명까지 모두 표기됩니다(6판에서는 6명 이후 et al. 처리).'
+        }
+      ]
+    }
+  ],
+
+  'academic-writing': [
+    {
+      id: 'topic-sentence',
+      title: '주제문 쓰기',
+      subtitle: '문단의 핵심 주장',
+      content: `
+        <h3>주제문(Topic Sentence)이란?</h3>
+        <p>주제문은 문단 전체의 핵심 주장을 담은 첫 문장입니다. 독자는 주제문만 읽어도 문단의 내용을 예측할 수 있어야 합니다.</p>
+        <div class="highlight">좋은 주제문 = 명확한 주장 + 논의 가능한 내용</div>
+        <h3>주제문 vs 주제</h3>
+        <ul>
+          <li><strong>주제(Topic):</strong> "AI와 창작" (단순 주제, 주장 없음)</li>
+          <li><strong>주제문(Topic Sentence):</strong> "생성형 AI는 기존 창작 과정을 근본적으로 변화시키고 있지만, 진정한 예술성은 여전히 인간의 감성적 해석에 달려 있다." (주장 있음)</li>
+        </ul>
+        <div class="example">
+          나쁜 주제문: "이 문단은 AI에 대해 이야기할 것이다."<br/>
+          좋은 주제문: "생성형 AI의 창작 보조는 디자이너의 초안 다양성을 유의미하게 증가시킨다."
+        </div>
+        <h3>학술 글쓰기의 문단 구조 (PEEL)</h3>
+        <ul>
+          <li><span class="term">P</span>oint: 주제문 (핵심 주장)</li>
+          <li><span class="term">E</span>vidence: 근거 (연구 결과, 인용)</li>
+          <li><span class="term">E</span>xplanation: 설명 (근거-주장 연결)</li>
+          <li><span class="term">L</span>ink: 연결 (다음 문단 또는 전체 논지와 연결)</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '다음 중 가장 좋은 주제문은?',
+          options: ['이 문단은 AI 창작에 대해 설명한다.', 'AI는 흥미롭다.', '생성형 AI는 디자이너의 초안 다양성을 유의미하게 증가시킨다.', 'AI 창작에는 많은 관점이 있다.'],
+          answer: 2,
+          explanation: '좋은 주제문은 명확한 주장을 담고 있어야 합니다. "생성형 AI는 디자이너의 초안 다양성을 유의미하게 증가시킨다"는 검증 가능한 구체적 주장입니다.'
+        },
+        {
+          q: 'PEEL 구조에서 "E(Explanation)"의 역할은?',
+          options: ['새로운 주제를 도입한다', '근거와 주제문을 논리적으로 연결한다', '참고문헌을 제시한다', '문단을 마무리한다'],
+          answer: 1,
+          explanation: 'PEEL에서 Explanation은 제시된 근거(Evidence)가 주제문(Point)을 어떻게 지지하는지를 설명하는 역할을 합니다.'
+        }
+      ]
+    },
+    {
+      id: 'evidence-linking',
+      title: '근거 연결',
+      subtitle: '증거-해석 조율',
+      content: `
+        <h3>증거와 해석의 균형</h3>
+        <p>학술 글쓰기에서 가장 흔한 실수는 <span class="term">증거를 나열하고 해석 없이 끝내는 것</span>입니다. 증거 제시 후 반드시 "이것이 왜/어떻게 중요한가"를 설명해야 합니다.</p>
+        <div class="highlight">
+          증거 → 해석(analysis) → 주장 연결<br/>
+          절대 금지: 인용문을 던져놓고 다음 문단으로 넘어가기
+        </div>
+        <h3>인용 후 해석의 패턴</h3>
+        <ul>
+          <li><strong>확인:</strong> "이는 본 연구의 결과와 일치한다..."</li>
+          <li><strong>확장:</strong> "그러나 Kim(2023)이 제시하지 않은 것은..."</li>
+          <li><strong>대조:</strong> "이와 달리 Lee(2022)는 반대 결과를 보고했는데..."</li>
+          <li><strong>통합:</strong> "이 두 연구를 종합하면..."</li>
+        </ul>
+        <div class="example">
+          나쁜 연결: Kim(2023)은 AI 창작이 세 유형으로 분류된다고 했다. 다음으로 문헌연구를 살펴보겠다.<br/>
+          좋은 연결: Kim(2023)의 세 유형 분류는 본 연구가 발견한 패턴과 일치하지만, 본 연구는 유형 간 역동적 상호작용이라는 추가 차원을 드러냈다는 점에서 기존 분류를 확장한다.
+        </div>
+        <h3>연결어(Transition Words) 활용</h3>
+        <ul>
+          <li>추가: 또한, 나아가, 더불어</li>
+          <li>대조: 그러나, 이에 반해, 반면</li>
+          <li>결과: 따라서, 이에 따라, 결과적으로</li>
+          <li>예시: 예를 들어, 구체적으로, 이를테면</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '인용 후 해석 없이 다음 문단으로 넘어가는 것이 문제인 이유는?',
+          options: ['인용 수가 너무 많아 보인다', '독자가 인용이 주장을 어떻게 지지하는지 이해하지 못한다', '참고문헌이 너무 많아진다', 'APA 규칙에 위배된다'],
+          answer: 1,
+          explanation: '인용 후 해석이 없으면 독자는 그 인용이 주제문을 어떻게 지지하는지 스스로 연결해야 하므로, 논리적 연결이 약해집니다.'
+        },
+        {
+          q: '"이와 달리 Lee(2022)는 반대 결과를 보고했는데..."는 어떤 유형의 연결인가?',
+          options: ['확인', '확장', '대조', '통합'],
+          answer: 2,
+          explanation: '"이와 달리"는 선행 연구와의 대조(contrast)를 나타내는 연결 패턴입니다.'
+        }
+      ]
+    },
+    {
+      id: 'coherence',
+      title: '문단 응집성',
+      subtitle: '연결어와 일관성',
+      content: `
+        <h3>응집성(Coherence)과 결속성(Cohesion)</h3>
+        <ul>
+          <li><span class="term">결속성(Cohesion):</span> 문장 간의 언어적 연결 (연결어, 대명사, 반복)</li>
+          <li><span class="term">응집성(Coherence):</span> 문단의 전체적인 논리적 흐름과 일관성</li>
+        </ul>
+        <div class="highlight">결속성은 형식적 연결, 응집성은 의미적 일관성입니다.</div>
+        <h3>문단 응집성 원칙</h3>
+        <ul>
+          <li>하나의 문단 = 하나의 핵심 아이디어</li>
+          <li>모든 문장이 주제문을 향해야 함</li>
+          <li>문장들이 논리적으로 이어져야 함</li>
+          <li>불필요한 반복과 장황한 표현 제거</li>
+        </ul>
+        <div class="example">
+          응집성 낮은 문단: "AI는 창작에 영향을 미친다. 오늘날 기후변화도 중요한 문제다. AI 기술은 빠르게 발전하고 있다."<br/>
+          응집성 높은 문단: "생성형 AI는 디자인 창작 과정을 근본적으로 변화시키고 있다. Kim(2023)에 따르면, AI를 활용한 디자이너의 초안 다양성이 37% 증가했으며, 이는 창작적 탐색 공간의 확장을 의미한다. 따라서 AI는 창작을 대체하는 것이 아니라 인간의 창작 역량을 증폭시키는 도구로 기능한다."
+        </div>
+        <h3>학술 문체 원칙</h3>
+        <ul>
+          <li>명확성: 모호한 표현 피하기 ("많은", "상당한" → 구체적 수치)</li>
+          <li>객관성: 개인적 의견과 사실 분리</li>
+          <li>공식성: 구어체 표현 피하기</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '응집성(Coherence)이란?',
+          options: ['문장 간의 언어적 연결(연결어, 대명사)', '문단의 논리적 흐름과 의미적 일관성', '참고문헌의 일관성', '서술 형식의 통일'],
+          answer: 1,
+          explanation: '응집성(Coherence)은 문단의 전체적인 논리적 흐름과 의미적 일관성을 가리킵니다. 형식적 연결(결속성)과는 구분됩니다.'
+        },
+        {
+          q: '다음 중 응집성이 낮은 문단의 특징은?',
+          options: ['한 문단에 하나의 아이디어만 다룬다', '모든 문장이 주제문을 지지한다', '한 문단에서 서로 무관한 주제가 등장한다', '연결어를 적절히 사용한다'],
+          answer: 2,
+          explanation: '응집성이 낮은 문단은 한 문단 안에 서로 무관한 주제가 섞여 있어 논리적 흐름이 깨집니다.'
+        }
+      ]
+    }
+  ],
+
+  'ai-tutor': [
+    {
+      id: 'concept-question',
+      title: '개념 질문',
+      subtitle: '모르는 용어 바로 체크',
+      content: `
+        <h3>AI 튜터 활용법: 개념 질문</h3>
+        <p>연구 학습 중 모르는 용어나 개념이 나올 때, AI 튜터에게 <span class="term">소크라테스식 질문(Socratic Method)</span>으로 확인하세요.</p>
+        <div class="highlight">
+          좋은 질문 형식:<br/>
+          "X가 Y와 어떻게 다른가?" (비교)<br/>
+          "X를 내 연구에 적용하면 어떻게 되는가?" (적용)<br/>
+          "X의 예를 하나 들어줄 수 있는가?" (예시)
+        </div>
+        <h3>개념 질문의 3단계</h3>
+        <ul>
+          <li><strong>1단계:</strong> 개념의 정의를 자신의 말로 표현해보기</li>
+          <li><strong>2단계:</strong> 구체적인 예를 들어보기</li>
+          <li><strong>3단계:</strong> 다른 개념과의 차이점 설명해보기</li>
+        </ul>
+        <div class="example">
+          연습: "Research Gap"을 자신의 말로 설명해보세요.<br/>
+          → AI 튜터가 피드백을 주고 보완합니다.
+        </div>
+        <h3>아래 AI 튜터에게 직접 질문해보세요!</h3>
+        <p>연구 관련 용어나 개념에 대해 자유롭게 질문하세요. AI 튜터가 소크라테스식 피드백을 제공합니다.</p>
+      `,
+      quiz: [
+        {
+          q: 'AI 튜터를 가장 효과적으로 활용하는 방법은?',
+          options: ['답을 바로 요청한다', '자신의 이해를 먼저 표현한 후 피드백을 받는다', 'AI가 모든 내용을 대신 작성하게 한다', '가능한 짧게 질문한다'],
+          answer: 1,
+          explanation: '소크라테스식 학습법에서는 학습자가 먼저 자신의 이해를 표현하고, 튜터가 이를 기반으로 피드백을 주는 방식이 가장 효과적입니다.'
+        },
+        {
+          q: '개념 질문의 가장 좋은 형식은?',
+          options: ['"X는 무엇인가?"', '"X가 Y와 어떻게 다른가?" 또는 "X를 내 연구에 어떻게 적용할 수 있는가?"', '"X를 알려줘"', '"X에 대해 모두 설명해줘"'],
+          answer: 1,
+          explanation: '비교·적용·예시 형식의 질문이 단순 정의 요청보다 더 깊은 이해를 이끌어냅니다.'
+        }
+      ]
+    },
+    {
+      id: 'writing-feedback',
+      title: '글쓰기 피드백',
+      subtitle: '초안에 대한 코칭',
+      content: `
+        <h3>AI 글쓰기 피드백 활용법</h3>
+        <p>AI 튜터에게 자신의 글 초안을 보여주고 구체적인 피드백을 요청하세요. 단, <span class="term">AI가 대신 써주는 것</span>이 아니라 <span class="term">자신의 글을 개선하는 코칭</span>으로 활용해야 합니다.</p>
+        <div class="highlight">
+          올바른 활용: "내가 쓴 이 주제문이 명확한가? 무엇이 부족한가?"<br/>
+          잘못된 활용: "이 문단을 대신 써줘."
+        </div>
+        <h3>피드백 요청 체크리스트</h3>
+        <ul>
+          <li>주제문이 명확하고 논의 가능한 주장을 담고 있는가?</li>
+          <li>근거가 주제문을 직접 지지하는가?</li>
+          <li>근거와 주제문 사이에 설명(해석)이 있는가?</li>
+          <li>문단이 논리적으로 이어지는가?</li>
+          <li>학술 문체를 사용하고 있는가?</li>
+        </ul>
+        <div class="example">
+          피드백 요청 예시:<br/>
+          "다음 문단의 주제문이 학술적으로 적절한지 확인해주세요: [자신의 문장 붙여넣기]"<br/>
+          "이 논의가 이론과 잘 연결되어 있는지 검토해주세요."
+        </div>
+        <h3>피드백을 학습에 반영하기</h3>
+        <p>받은 피드백을 단순히 적용하는 것을 넘어, <span class="term">왜 그 수정이 필요한가</span>를 이해하는 것이 중요합니다.</p>
+      `,
+      quiz: [
+        {
+          q: 'AI 글쓰기 피드백을 올바르게 활용하는 방법은?',
+          options: ['AI가 논문 전체를 대신 작성하게 한다', '자신의 초안에 대한 구체적 피드백을 받고 스스로 개선한다', 'AI의 수정안을 그대로 복사한다', '피드백 없이 제출한다'],
+          answer: 1,
+          explanation: 'AI 튜터는 자신의 글을 개선하는 코칭 도구로 활용해야 합니다. 대신 써주는 것이 아니라, 피드백을 받고 스스로 개선하는 과정이 학습입니다.'
+        },
+        {
+          q: '받은 피드백을 학습에 올바르게 반영하는 방법은?',
+          options: ['피드백을 그대로 복사한다', '왜 그 수정이 필요한가를 이해하고 적용한다', '피드백을 무시하고 원래 글을 유지한다', '다른 AI에게 같은 질문을 반복한다'],
+          answer: 1,
+          explanation: '피드백을 단순히 적용하는 것을 넘어 "왜 그 수정이 필요한가"를 이해하는 것이 진정한 학습입니다.'
+        }
+      ]
+    },
+    {
+      id: 'learning-recommendation',
+      title: '다음 학습 추천',
+      subtitle: '약점 기반 추천',
+      content: `
+        <h3>개인화 학습 경로</h3>
+        <p>RDOS AI 튜터는 여러분의 학습 패턴과 퀴즈 결과를 분석하여 <span class="term">다음에 집중해야 할 영역</span>을 추천합니다.</p>
+        <div class="highlight">
+          Competency Kernel이 분석하는 것:<br/>
+          - 어떤 개념에서 오답이 많았는가?<br/>
+          - 어떤 모듈을 빠르게 통과했는가?<br/>
+          - Alignment Kernel에서 경고가 발생한 영역은?
+        </div>
+        <h3>자기주도 학습 계획 수립</h3>
+        <ul>
+          <li><span class="term">강점 영역:</span> 더 심화된 내용으로 발전</li>
+          <li><span class="term">약점 영역:</span> 반복 학습과 추가 예제</li>
+          <li><span class="term">미완료 영역:</span> 우선순위 설정</li>
+        </ul>
+        <div class="example">
+          예시 추천:<br/>
+          "연구설계 기초의 타당도 개념에서 70% 이하 점수를 기록했습니다. → 표집과 타당도 모듈 재학습을 권장합니다."<br/>
+          "APA 인용 모듈을 완료했습니다. → 학술 글쓰기 훈련의 근거 연결 모듈로 진행하세요."
+        </div>
+        <h3>메타인지(Metacognition)</h3>
+        <p>자신의 학습 과정을 스스로 관찰하고 조절하는 능력:</p>
+        <ul>
+          <li>"나는 어디에서 막히는가?"</li>
+          <li>"이 개념을 실제로 이해했는가, 아니면 암기했는가?"</li>
+          <li>"이 지식을 내 연구에 적용할 수 있는가?"</li>
+        </ul>
+      `,
+      quiz: [
+        {
+          q: '메타인지(Metacognition)란?',
+          options: ['연구 방법론 용어', '자신의 학습 과정을 스스로 관찰하고 조절하는 능력', 'AI 튜터의 학습 분석 기능', '퀴즈 점수 산정 방식'],
+          answer: 1,
+          explanation: '메타인지는 자신이 어떻게 학습하고 있는지를 인식하고 조절하는 능력으로, 효과적인 자기주도 학습의 핵심입니다.'
+        },
+        {
+          q: 'AI 튜터의 학습 추천이 기반으로 하는 데이터는?',
+          options: ['학습자의 나이와 학력', '퀴즈 결과, 학습 패턴, Alignment 경고', '학습 시간만', '선택한 전공 분야'],
+          answer: 1,
+          explanation: 'RDOS의 AI 튜터는 Competency Kernel과 Analytics Kernel의 데이터(퀴즈 결과, 학습 패턴, 정합성 경고)를 분석하여 개인화된 학습을 추천합니다.'
+        }
+      ]
+    }
+  ]
+};
+
+// ─── MENU CONFIG ──────────────────────────────────────────────────
+const MENUS = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'D', color: '#64748b' },
+  {
+    id: 'research-basics', label: 'Research Basics', icon: 'R', color: '#10b981',
+    category: '연구 기초', engine: 'research-foundation',
+    description: '연구가 무엇인지, 연구문제-목적-질문의 관계를 익히는 입문 모듈입니다.',
+    xp: 15, literacy: 'researchLiteracy', litLabel: 'researchLiteracy',
+    knowledgeNode: 'research-problem', alignKey: null,
+    goals: ['연구의 정의와 학술적 글의 성격을 설명할 수 있다', '연구문제-목적-질문의 위계를 구분할 수 있다', '좋은 연구문제의 조건을 평가할 수 있다'],
+  },
+  {
+    id: 'paper-structure', label: '논문 구조 학습', icon: '논', color: '#8b5cf6',
+    category: '논문 구조 이해', engine: 'academic-writing',
+    description: '서론-이론적 배경-방법-결과-논의로 이어지는 논문의 뼈대를 이해합니다.',
+    xp: 15, literacy: 'academicLiteracy', litLabel: 'academicLiteracy',
+    knowledgeNode: 'paper-structure', alignKey: null,
+    goals: ['IMRaD 구조의 각 장 역할을 설명할 수 있다', '장(章) 간 논리적 연결을 파악할 수 있다', '초록의 구성 요소를 작성할 수 있다'],
+  },
+  {
+    id: 'research-design', label: '연구설계 기초', icon: '연', color: '#f59e0b',
+    category: '연구설계 작성', engine: 'research-design-studio',
+    description: '연구문제를 정의하고 변수-표집-타당도를 설계하는 기초를 다룹니다.',
+    xp: 15, literacy: 'methodLiteracy', litLabel: 'methodLiteracy',
+    knowledgeNode: 'research-design', alignKey: 'methodAlignment',
+    goals: ['연구문제를 측정가능한 형태로 구체화할 수 있다', '독립·종속·매개 변수를 구분할 수 있다', '표집과 타당도의 기본 개념을 적용할 수 있다'],
+  },
+  {
+    id: 'research-methods', label: '연구방법론 기초', icon: '연', color: '#f97316',
+    category: '양적·질적 개요', engine: 'research-foundation',
+    description: '양적·질적 연구방법의 차이와 선택 기준을 개관합니다.',
+    xp: 15, literacy: 'methodLiteracy', litLabel: 'methodLiteracy',
+    knowledgeNode: 'research-method', alignKey: 'competencyMethod',
+    goals: ['양적/질적 패러다임의 관계를 비교할 수 있다', '연구질문에 맞는 방법을 선택할 수 있다', '혼합연구의 필요성을 설명할 수 있다'],
+  },
+  {
+    id: 'paper-reading', label: '논문 읽기 훈련', icon: '논', color: '#06b6d4',
+    category: '논문 분석', engine: 'academic-thinking',
+    description: '논문을 비판적으로 읽고 핵심 주장-근거-한계를 분석합니다.',
+    xp: 15, literacy: 'thinkingLiteracy', litLabel: 'thinkingLiteracy',
+    knowledgeNode: 'critical-reading', alignKey: 'researchQuestion',
+    goals: ['논문을 효율적 순서로 읽을 수 있다', '주장과 근거의 연결을 평가할 수 있다', '연구의 한계를 식별할 수 있다'],
+  },
+  {
+    id: 'apa', label: 'APA 학습', icon: 'A', color: '#6366f1',
+    category: '인용·참고문헌', engine: 'academic-writing',
+    description: 'APA 7판 인용-참고문헌 작성 규칙을 학습합니다.',
+    xp: 15, literacy: 'writingLiteracy', litLabel: 'writingLiteracy',
+    knowledgeNode: 'apa-citation', alignKey: null,
+    goals: ['본문 내 인용 형식을 적용할 수 있다', '참고문헌 목록을 작성할 수 있다', 'DOI·전자자료를 올바르게 표기할 수 있다'],
+  },
+  {
+    id: 'academic-writing', label: '학술 글쓰기 훈련', icon: '학', color: '#ec4899',
+    category: '문단 작성', engine: 'academic-writing',
+    description: '주제문-근거-해석으로 이어지는 학술 문단 작성을 훈련합니다.',
+    xp: 15, literacy: 'writingLiteracy', litLabel: 'writingLiteracy',
+    knowledgeNode: 'academic-writing', alignKey: 'writingQuest',
+    goals: ['주제문을 명확히 진술할 수 있다', '근거를 논리적으로 연결할 수 있다', '문단의 응집성을 점검할 수 있다'],
+  },
+  {
+    id: 'ai-tutor', label: 'AI 튜터', icon: 'A', color: '#14b8a6',
+    category: '질의응답', engine: 'research-tutor',
+    description: '연구 학습 중 궁금한 점을 묻고 소크라테스식 피드백을 받습니다.',
+    xp: 15, literacy: 'aiLiteracy', litLabel: 'aiLiteracy',
+    knowledgeNode: 'ai-tutor', alignKey: 'analyticsPattern',
+    goals: ['개념 질문을 구체적으로 표현할 수 있다', '피드백을 학습에 반영할 수 있다', '다음 학습을 스스로 계획할 수 있다'],
+  },
+  { id: 'growth', label: '성장 로드맵', icon: '성', color: '#f59e0b' },
+];
+
+const LEVELS = [
+  { level: 0, title: 'L0 · 연구 입문자', eng: 'Research Novice', xp: 0 },
+  { level: 1, title: 'L1 · 연구 탐색자', eng: 'Research Explorer', xp: 100 },
+  { level: 2, title: 'L2 · 연구 학습자', eng: 'Research Learner', xp: 200 },
+  { level: 3, title: 'L3 · 연구 사고자', eng: 'Research Thinker', xp: 300 },
+  { level: 4, title: 'L4 · 연구 수련자', eng: 'Research Apprentice', xp: 400 },
+  { level: 5, title: 'L5 · 연구 설계자', eng: 'Research Designer', xp: 500 },
+  { level: 6, title: 'L6 · 연구 기획자', eng: 'Research Planner', xp: 600 },
+  { level: 7, title: 'L7 · 연구 작성자', eng: 'Research Writer', xp: 700 },
+  { level: 8, title: 'L8 · 연구 실행자', eng: 'Research Executor', xp: 800 },
+  { level: 9, title: 'L9 · 연구 준비자', eng: 'Research-Ready Scholar', xp: 900 },
+];
+
+const MENU_ORDER = ['research-basics','paper-structure','research-design','research-methods','paper-reading','apa','academic-writing','ai-tutor'];
+
+// ─── INITIAL STATE ────────────────────────────────────────────────
+const defaultKernel = () => ({
+  xp: 115,
+  completedLessons: {}, // { menuId: [lessonIndex, ...] }
+  literacy: { researchLiteracy:12, academicLiteracy:6, methodLiteracy:0, thinkingLiteracy:0, writingLiteracy:0, aiLiteracy:0 },
+  badges: ['🔬 Research Starter'],
+  streakDays: 3,
+  chatHistory: [],
+});
+
+// ─── HELPERS ──────────────────────────────────────────────────────
+function getLevel(xp) {
+  let lv = 0;
+  for(let l of LEVELS) if(xp >= l.xp) lv = l.level;
+  return lv;
+}
+function getProgress(menuId, kernel) {
+  const lessons = LESSONS[menuId] || [];
+  const done = (kernel.completedLessons[menuId] || []).length;
+  return Math.round((done / Math.max(lessons.length,1)) * 100);
+}
+function getTotalProgress(kernel) {
+  let total = 0, done = 0;
+  for(const mid of MENU_ORDER) {
+    const ls = LESSONS[mid] || [];
+    total += ls.length;
+    done += (kernel.completedLessons[mid] || []).length;
+  }
+  return Math.round((done/Math.max(total,1))*100);
+}
+
+// ─── QUIZ COMPONENT ───────────────────────────────────────────────
+function QuizItem({ q, idx, answered, setAnswer }) {
+  const [selected, setSelected] = useState(null);
+  const [revealed, setRevealed] = useState(false);
+
+  function pick(i) {
+    if(revealed) return;
+    setSelected(i);
+    setRevealed(true);
+    if(i === q.answer) setAnswer(idx, true);
+    else setAnswer(idx, false);
+  }
+
+  return (
+    <div className="quiz-q">
+      <div className="quiz-q-text">{idx+1}. {q.q}</div>
+      {q.options.map((opt,i) => {
+        let cls = 'quiz-option';
+        if(revealed) cls += ' disabled';
+        if(selected === i) {
+          if(i === q.answer) cls += ' correct';
+          else cls += ' incorrect';
+        } else if(revealed && i === q.answer) cls += ' correct';
+        let radioClass = 'quiz-radio';
+        if(selected === i) radioClass += (i===q.answer?' correct-r':' incorrect-r');
+        return (
+          <div key={i} className={cls} onClick={()=>pick(i)}>
+            <div className={radioClass}>{selected===i && <span style={{color:'#fff',fontSize:10}}>●</span>}</div>
+            {opt}
+          </div>
+        );
+      })}
+      {revealed && (
+        <div className={'quiz-feedback '+(selected===q.answer?'feedback-correct':'feedback-incorrect')}>
+          {selected===q.answer ? '✓ 정답입니다! ' : '✗ 오답입니다. '}
+          {q.explanation}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── LESSON MODAL ─────────────────────────────────────────────────
+function LessonModal({ menu, lessonIdx, onClose, onComplete, alreadyDone }) {
+  const lesson = LESSONS[menu.id][lessonIdx];
+  const [tab, setTab] = useState('content'); // content | quiz
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const allAnswered = lesson.quiz.every((_,i) => quizAnswers[i] !== undefined);
+
+  function setAnswer(idx, correct) {
+    setQuizAnswers(prev => ({...prev, [idx]: correct}));
+  }
+  function canComplete() { return tab==='quiz' && allAnswered; }
+
+  return (
+    <div className="modal-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="modal-header">
+          <div>
+            <div className="modal-title">{lesson.title}</div>
+            <div style={{fontSize:11,color:'#64748b',marginTop:2}}>{lesson.subtitle}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div style={{display:'flex',gap:8,marginBottom:20}}>
+            {['content','quiz'].map(t=>(
+              <button key={t} onClick={()=>setTab(t)} style={{
+                padding:'6px 16px',borderRadius:6,border:'none',cursor:'pointer',fontFamily:'inherit',
+                fontSize:13,fontWeight:600,
+                background:tab===t?'#1e3a5f':'#1e293b',
+                color:tab===t?'#60a5fa':'#94a3b8'
+              }}>
+                {t==='content'?'📖 학습 내용':'📝 퀴즈'}
+              </button>
+            ))}
+          </div>
+          {tab==='content' && (
+            <div>
+              <div className="lesson-section-title">학습 내용</div>
+              <div className="lesson-content" dangerouslySetInnerHTML={{__html:lesson.content}}/>
+              <div style={{marginTop:16,textAlign:'right'}}>
+                <button className="cta-btn" onClick={()=>setTab('quiz')} style={{background:'#1d4ed8',color:'#fff'}}>
+                  퀴즈 풀기 →
+                </button>
+              </div>
+            </div>
+          )}
+          {tab==='quiz' && (
+            <div className="quiz-section">
+              <div className="lesson-section-title">이해도 퀴즈</div>
+              {lesson.quiz.map((q,i)=>(
+                <QuizItem key={i} q={q} idx={i} answered={quizAnswers[i]!==undefined} setAnswer={setAnswer}/>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="cta-btn" onClick={onClose} style={{background:'#1e293b',color:'#94a3b8'}}>닫기</button>
+          {!alreadyDone && (
+            <button
+              className="cta-btn"
+              disabled={!canComplete()}
+              onClick={()=>{ if(canComplete()) onComplete(); }}
+              style={{background:canComplete()?'#065f46':'#1e293b',color:canComplete()?'#6ee7b7':'#475569',cursor:canComplete()?'pointer':'not-allowed'}}
+            >
+              {tab!=='quiz' ? '퀴즈를 완료해야 합니다' : allAnswered ? '✓ 레슨 완료' : '퀴즈를 모두 풀어주세요'}
+            </button>
+          )}
+          {alreadyDone && (
+            <span style={{fontSize:12,color:'#10b981',padding:'8px 16px'}}>✓ 완료된 레슨</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MENU PAGE ────────────────────────────────────────────────────
+function MenuPage({ menu, kernel, onBack, onLessonComplete }) {
+  const [activeLessonIdx, setActiveLessonIdx] = useState(null);
+  const lessons = LESSONS[menu.id] || [];
+  const completed = kernel.completedLessons[menu.id] || [];
+  const progress = getProgress(menu.id, kernel);
+
+  const allDone = completed.length === lessons.length;
+
+  function moduleStatus(i) {
+    if(completed.includes(i)) return 'done';
+    if(i === completed.length) return 'active';
+    return 'locked';
+  }
+
+  return (
+    <div className="page">
+      <div className="back-link" onClick={onBack}>← Dashboard</div>
+      <div className="page-header">
+        <div className="page-title-row">
+          <div className="page-icon" style={{background:menu.color+'22',color:menu.color}}>{menu.icon}</div>
+          <div>
+            <div className="page-title">{menu.label}</div>
+            <div className="page-meta">제공: {menu.category} · engine: {menu.engine}</div>
+          </div>
+        </div>
+        <div className="mission-progress">
+          <div className="mission-label">미션 진행</div>
+          <div className="mission-pct" style={{color:menu.color}}>{progress}%</div>
+        </div>
+      </div>
+      <div className="progress-bar">
+        <div className="progress-fill" style={{width:progress+'%',background:menu.color}}/>
+      </div>
+      <div className="page-desc">{menu.description}</div>
+
+      <div className="section-title">학습 목표</div>
+      <div className="goals-grid">
+        {menu.goals.map((g,i)=>(
+          <div key={i} className="goal-card">
+            <div className="goal-label">목표 {i+1}</div>
+            {g}
+          </div>
+        ))}
+      </div>
+
+      <div className="section-title">학습 모듈</div>
+      <div className="modules-list">
+        {lessons.map((lesson,i)=>{
+          const st = moduleStatus(i);
+          const isDone = st==='done';
+          const isActive = st==='active';
+          const isLocked = st==='locked';
+          return (
+            <div
+              key={i}
+              className={'module-item'+(isLocked?' locked':'')}
+              onClick={()=>!isLocked&&setActiveLessonIdx(i)}
+            >
+              <div className={'module-num'+(isDone?' done':isActive?' active':'')}>
+                {isDone?'✓':i+1}
+              </div>
+              <div className="module-info">
+                <div className="module-title">{lesson.title}</div>
+                <div className="module-sub">{lesson.subtitle}</div>
+              </div>
+              <div className={'module-status '+(isDone?'status-done':isActive?'status-active':'status-locked')}>
+                {isDone?'완료':isActive?'진행 중':'잠금'}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {allDone ? (
+        <button className="cta-btn done" style={{marginBottom:16}}>이 미션 완료됨 ✓</button>
+      ) : (
+        <button className="cta-btn" onClick={()=>{
+          const nextIdx = completed.length < lessons.length ? completed.length : null;
+          if(nextIdx !== null) setActiveLessonIdx(nextIdx);
+        }} style={{background:menu.color,color:'#000',marginBottom:16}}>
+          다음 레슨 완료
+        </button>
+      )}
+
+      <div className="kernel-reward">
+        <div className="kernel-reward-title">이 미션 완료 시 (커널 보상)</div>
+        <div className="reward-tags">
+          <span className="reward-tag tag-xp">XP +{menu.xp}/레슨</span>
+          <span className="reward-tag tag-literacy">{menu.litLabel} +6/레슨</span>
+          {menu.knowledgeNode && <span className="reward-tag tag-knowledge">Knowledge: {menu.knowledgeNode} 노드 숙련</span>}
+          {menu.alignKey && <span className="reward-tag tag-alignment">Alignment: {menu.alignKey} 체인 등록</span>}
+        </div>
+        <div className="kernel-link">연결 엔진: <span>{menu.engine}</span> · 진행은 Supabase에 저장되어 대시보드(커널 도출)에 반영됩니다.</div>
+      </div>
+
+      {activeLessonIdx !== null && (
+        <LessonModal
+          menu={menu}
+          lessonIdx={activeLessonIdx}
+          onClose={()=>setActiveLessonIdx(null)}
+          alreadyDone={(kernel.completedLessons[menu.id]||[]).includes(activeLessonIdx)}
+          onComplete={()=>{
+            onLessonComplete(menu, activeLessonIdx);
+            setActiveLessonIdx(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── AI TUTOR CHAT ────────────────────────────────────────────────
+function AiTutorPage({ menu, kernel, onBack, onLessonComplete }) {
+  const [chat, setChat] = useState([
+    { role:'ai', text:'안녕하세요! 저는 RDOS AI 튜터입니다. 연구 학습 중 궁금한 것이 있으면 질문하세요. 소크라테스식 대화로 여러분의 이해를 깊게 만들어 드리겠습니다. 💡' }
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const chatRef = useRef(null);
+  const [activeLessonIdx, setActiveLessonIdx] = useState(null);
+  const lessons = LESSONS[menu.id] || [];
+  const completed = kernel.completedLessons[menu.id] || [];
+  const progress = getProgress(menu.id, kernel);
+
+  useEffect(()=>{
+    if(chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+  },[chat]);
+
+  async function send() {
+    if(!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput('');
+    setChat(prev=>[...prev,{role:'user',text:userMsg}]);
+    setLoading(true);
+
+    const systemPrompt = `당신은 RDOS(Research Development Operating System)의 AI 튜터입니다.
+학습자가 연구 방법론, 논문 작성, APA 인용 등 학술 연구에 대해 질문할 때 소크라테스식 대화법으로 응답합니다.
+규칙:
+1. 답을 바로 주지 않고, 학습자가 먼저 생각하도록 유도합니다
+2. 학습자의 이해를 확인하는 질문을 합니다
+3. 틀렸을 때는 왜 틀렸는지 설명하고 올바른 방향을 제시합니다
+4. 한국어로 답변합니다
+5. 학술 연구 관련 개념(Research Gap, 타당도, 신뢰도, APA, 연구문제, 변수 등)에 대해 전문적으로 설명합니다
+6. 답변은 간결하게 (3-5문장 내외)`;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model:'claude-sonnet-4-20250514',
+          max_tokens:1000,
+          system: systemPrompt,
+          messages:[
+            ...chat.filter(m=>m.role!=='ai'||chat.indexOf(m)>0).map(m=>({role:m.role==='ai'?'assistant':'user',content:m.text})),
+            {role:'user',content:userMsg}
+          ]
+        })
+      });
+      const data = await response.json();
+      const reply = data.content?.[0]?.text || '죄송합니다, 응답을 생성하지 못했습니다.';
+      setChat(prev=>[...prev,{role:'ai',text:reply}]);
+    } catch(e) {
+      setChat(prev=>[...prev,{role:'ai',text:'연결 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'}]);
+    }
+    setLoading(false);
+  }
+
+  function moduleStatus(i) {
+    if(completed.includes(i)) return 'done';
+    if(i === completed.length) return 'active';
+    return 'locked';
+  }
+
+  return (
+    <div className="page">
+      <div className="back-link" onClick={onBack}>← Dashboard</div>
+      <div className="page-header">
+        <div className="page-title-row">
+          <div className="page-icon" style={{background:menu.color+'22',color:menu.color}}>{menu.icon}</div>
+          <div>
+            <div className="page-title">{menu.label}</div>
+            <div className="page-meta">제공: {menu.category} · engine: {menu.engine}</div>
+          </div>
+        </div>
+        <div className="mission-progress">
+          <div className="mission-label">미션 진행</div>
+          <div className="mission-pct" style={{color:menu.color}}>{progress}%</div>
+        </div>
+      </div>
+      <div className="progress-bar">
+        <div className="progress-fill" style={{width:progress+'%',background:menu.color}}/>
+      </div>
+      <div className="page-desc">{menu.description}</div>
+
+      <div className="section-title">학습 목표</div>
+      <div className="goals-grid">
+        {menu.goals.map((g,i)=>(
+          <div key={i} className="goal-card"><div className="goal-label">목표 {i+1}</div>{g}</div>
+        ))}
+      </div>
+
+      <div className="section-title">학습 모듈</div>
+      <div className="modules-list" style={{marginBottom:16}}>
+        {lessons.map((lesson,i)=>{
+          const st = moduleStatus(i);
+          const isDone = st==='done';
+          const isActive = st==='active';
+          const isLocked = st==='locked';
+          return (
+            <div key={i} className={'module-item'+(isLocked?' locked':'')} onClick={()=>!isLocked&&setActiveLessonIdx(i)}>
+              <div className={'module-num'+(isDone?' done':isActive?' active':'')}>{isDone?'✓':i+1}</div>
+              <div className="module-info">
+                <div className="module-title">{lesson.title}</div>
+                <div className="module-sub">{lesson.subtitle}</div>
+              </div>
+              <div className={'module-status '+(isDone?'status-done':isActive?'status-active':'status-locked')}>
+                {isDone?'완료':isActive?'진행 중':'잠금'}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="divider"/>
+      <div className="section-title">💬 AI 튜터 채팅</div>
+      <div className="chat-container" ref={chatRef}>
+        {chat.map((m,i)=>(
+          <div key={i} className={'chat-msg '+m.role}>
+            <div className={'chat-bubble '+m.role}>{m.text}</div>
+          </div>
+        ))}
+        {loading && (
+          <div className="chat-msg ai">
+            <div className="chat-bubble ai" style={{color:'#64748b'}}>AI 튜터가 답변 중...</div>
+          </div>
+        )}
+      </div>
+      <div className="chat-input-row">
+        <textarea
+          className="chat-input"
+          value={input}
+          onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}}
+          placeholder="연구 개념이나 궁금한 것을 질문하세요..."
+          rows={2}
+        />
+        <button className="chat-send-btn" onClick={send} disabled={loading}>전송</button>
+      </div>
+
+      <div className="kernel-reward" style={{marginTop:16}}>
+        <div className="kernel-reward-title">이 미션 완료 시 (커널 보상)</div>
+        <div className="reward-tags">
+          <span className="reward-tag tag-xp">XP +{menu.xp}/레슨</span>
+          <span className="reward-tag tag-literacy">{menu.litLabel} +6/레슨</span>
+          <span className="reward-tag tag-analytics">Analytics: 학습 패턴 기록</span>
+        </div>
+        <div className="kernel-link">연결 엔진: <span>{menu.engine}</span> · 진행은 Supabase에 저장되어 대시보드(커널 도출)에 반영됩니다.</div>
+      </div>
+
+      {activeLessonIdx !== null && (
+        <LessonModal
+          menu={menu}
+          lessonIdx={activeLessonIdx}
+          onClose={()=>setActiveLessonIdx(null)}
+          alreadyDone={(kernel.completedLessons[menu.id]||[]).includes(activeLessonIdx)}
+          onComplete={()=>{ onLessonComplete(menu, activeLessonIdx); setActiveLessonIdx(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────
+function Dashboard({ kernel, onNavigate }) {
+  const lv = getLevel(kernel.xp);
+  const lvInfo = LEVELS[lv];
+  const nextLv = LEVELS[Math.min(lv+1,9)];
+  const xpToNext = nextLv.xp - kernel.xp;
+  const totalProgress = getTotalProgress(kernel);
+
+  return (
+    <div className="page">
+      <div style={{marginBottom:24}}>
+        <div style={{fontSize:22,fontWeight:700,color:'#f1f5f9',marginBottom:4}}>Dashboard</div>
+        <div style={{fontSize:13,color:'#64748b'}}>연구자 성장 단계 — 학습으로 XP를 쌓아 Research-Ready Scholar(L9)에 도달합니다.</div>
+      </div>
+
+      <div className="dashboard-grid">
+        <div className="stat-card">
+          <div className="stat-label">현재 레벨</div>
+          <div className="stat-value" style={{fontSize:20,color:'#f59e0b'}}>{lvInfo.title}</div>
+          <div className="stat-sub">{lvInfo.eng}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">총 XP</div>
+          <div className="stat-value">{kernel.xp} XP</div>
+          <div className="stat-sub">다음 레벨까지 {xpToNext} XP</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">전체 진행률</div>
+          <div className="stat-value">{totalProgress}%</div>
+          <div className="stat-sub">연속 학습 {kernel.streakDays}일</div>
+        </div>
+      </div>
+
+      <div className="missions-panel">
+        <div style={{fontSize:13,fontWeight:600,color:'#94a3b8',marginBottom:12,textTransform:'uppercase',letterSpacing:'.8px'}}>미션 현황</div>
+        {MENUS.filter(m=>m.id!=='dashboard'&&m.id!=='growth').map(menu=>{
+          const prog = getProgress(menu.id, kernel);
+          return (
+            <div key={menu.id} className="mission-row" style={{cursor:'pointer'}} onClick={()=>onNavigate(menu.id)}>
+              <div className="mission-row-icon" style={{background:menu.color+'22',color:menu.color}}>{menu.icon}</div>
+              <div className="mission-row-info">
+                <div className="mission-row-title">{menu.label}</div>
+                <div className="mission-row-sub">{menu.category||menu.engine||''}</div>
+              </div>
+              <div className="mission-row-pct" style={{color:prog===100?'#10b981':prog>0?'#60a5fa':'#64748b'}}>
+                {prog}%
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{fontSize:13,fontWeight:600,color:'#94a3b8',marginBottom:12,textTransform:'uppercase',letterSpacing:'.8px'}}>역량 리터러시</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:24}}>
+        {Object.entries(kernel.literacy).map(([k,v])=>(
+          <div key={k} style={{background:'#111827',border:'1px solid #1e293b',borderRadius:8,padding:'12px 14px'}}>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:6}}>{k}</div>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div style={{flex:1,height:4,background:'#1e293b',borderRadius:2,overflow:'hidden'}}>
+                <div style={{height:'100%',background:'#3b82f6',borderRadius:2,width:Math.min(v,100)+'%'}}/>
+              </div>
+              <span style={{fontSize:12,fontWeight:600,color:'#93c5fd'}}>{v}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{fontSize:13,fontWeight:600,color:'#94a3b8',marginBottom:12,textTransform:'uppercase',letterSpacing:'.8px'}}>배지</div>
+      <div className="badge-grid">
+        {kernel.badges.map((b,i)=>(
+          <div key={i} className="badge-item">
+            <div className="badge-icon">{b.split(' ')[0]}</div>
+            <div className="badge-name">{b.replace(/^[^\s]+\s/,'')}</div>
+          </div>
+        ))}
+        {kernel.badges.length===0 && <div style={{fontSize:12,color:'#475569'}}>아직 배지가 없습니다. 미션을 완료하세요!</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── GROWTH ROADMAP ───────────────────────────────────────────────
+function GrowthRoadmap({ kernel, onBack }) {
+  const lv = getLevel(kernel.xp);
+  return (
+    <div className="page">
+      <div style={{marginBottom:20}}>
+        <div style={{fontSize:22,fontWeight:700,color:'#f1f5f9',marginBottom:4}}>성장 로드맵</div>
+        <div style={{fontSize:13,color:'#64748b'}}>연구자 성장 단계 — 학습으로 XP를 쌓아 Research-Ready Scholar(L9)에 도달합니다. (현재 {kernel.xp} XP)</div>
+      </div>
+      <div className="level-list">
+        {LEVELS.map(l=>{
+          const isDone = lv > l.level;
+          const isCurrent = lv === l.level;
+          return (
+            <div key={l.level} className={'level-item'+(isCurrent?' current':isDone?' done':'')}>
+              <div className={'level-dot'+(isCurrent?' current-d':isDone?' done-d':'')}/>
+              <div className="level-info">
+                <div className="level-title">{l.title} {isCurrent&&<span style={{fontSize:11,color:'#d97706',marginLeft:6}}>현재</span>}</div>
+                <div className="level-sub">{l.eng}</div>
+              </div>
+              <div className="level-xp">{l.xp} XP</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── NOTIFICATION TOAST ───────────────────────────────────────────
+function Toast({ msg, onDone }) {
+  useEffect(()=>{
+    const t = setTimeout(onDone, 3000);
+    return ()=>clearTimeout(t);
+  },[]);
+  return (
+    <div style={{position:'fixed',bottom:24,right:24,background:'#064e3b',border:'1px solid #065f46',borderRadius:10,padding:'14px 20px',zIndex:200,color:'#6ee7b7',fontSize:13,boxShadow:'0 4px 24px rgba(0,0,0,.5)',maxWidth:320}}>
+      {msg}
+    </div>
+  );
+}
+
+// ─── APP ──────────────────────────────────────────────────────────
+function App() {
+  const [currentMenu, setCurrentMenu] = useState('dashboard');
+  const [toast, setToast] = useState(null);
+  const [kernel, setKernel] = useState(()=>{
+    try {
+      const saved = localStorage.getItem('rdos-kernel-v4');
+      return saved ? JSON.parse(saved) : defaultKernel();
+    } catch { return defaultKernel(); }
+  });
+
+  useEffect(()=>{
+    localStorage.setItem('rdos-kernel-v4', JSON.stringify(kernel));
+  },[kernel]);
+
+  function showToast(msg) {
+    setToast(msg);
+  }
+
+  function handleLessonComplete(menu, lessonIdx) {
+    setKernel(prev=>{
+      const done = prev.completedLessons[menu.id] || [];
+      if(done.includes(lessonIdx)) return prev;
+      const newDone = [...done, lessonIdx];
+      const newXp = prev.xp + menu.xp;
+      const newLit = {...prev.literacy, [menu.literacy]: (prev.literacy[menu.literacy]||0)+6};
+      let newBadges = [...prev.badges];
+
+      // Badge logic
+      if(newDone.length === (LESSONS[menu.id]||[]).length) {
+        const badge = '🏆 ' + menu.label + ' 완료';
+        if(!newBadges.includes(badge)) newBadges.push(badge);
+      }
+      const prevLv = getLevel(prev.xp);
+      const newLv = getLevel(newXp);
+      if(newLv > prevLv) {
+        const lvBadge = '⭐ '+LEVELS[newLv].title+' 달성';
+        if(!newBadges.includes(lvBadge)) newBadges.push(lvBadge);
+      }
+
+      showToast(`✓ 레슨 완료! XP +${menu.xp} · ${menu.litLabel} +6`);
+
+      return {
+        ...prev,
+        xp: newXp,
+        completedLessons: {...prev.completedLessons, [menu.id]: newDone},
+        literacy: newLit,
+        badges: newBadges,
+      };
+    });
+  }
+
+  const activeMenu = MENUS.find(m=>m.id===currentMenu);
+
+  function renderContent() {
+    if(currentMenu === 'dashboard') return <Dashboard kernel={kernel} onNavigate={id=>setCurrentMenu(id)}/>;
+    if(currentMenu === 'growth') return <GrowthRoadmap kernel={kernel} onBack={()=>setCurrentMenu('dashboard')}/>;
+    if(!activeMenu) return null;
+    if(currentMenu === 'ai-tutor') {
+      return <AiTutorPage menu={activeMenu} kernel={kernel} onBack={()=>setCurrentMenu('dashboard')} onLessonComplete={handleLessonComplete}/>;
+    }
+    return <MenuPage menu={activeMenu} kernel={kernel} onBack={()=>setCurrentMenu('dashboard')} onLessonComplete={handleLessonComplete}/>;
+  }
+
+  return (
+    <div className="app">
+      <div className="sidebar">
+        <div className="sidebar-logo">
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+            <div style={{width:26,height:26,background:'linear-gradient(135deg,#4f46e5,#7c3aed)',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#fff'}}>R</div>
+            <div className="sidebar-logo-title">RDOS</div>
+          </div>
+          <div className="sidebar-logo-sub">연구준비자</div>
+        </div>
+        {MENUS.map(m=>(
+          <div
+            key={m.id}
+            className={'sidebar-item'+(currentMenu===m.id?' active':'')}
+            onClick={()=>setCurrentMenu(m.id)}
+          >
+            <div className="sidebar-icon" style={{background:m.color+'22',color:m.color}}>{m.icon}</div>
+            <span style={{fontSize:12}}>{m.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="main">
+        {renderContent()}
+      </div>
+      {toast && <Toast msg={toast} onDone={()=>setToast(null)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
