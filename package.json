@@ -1,0 +1,45 @@
+{
+  "name": "ai-research-os-plus-rdos",
+  "version": "10.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/realtime",
+    "apps/desktop",
+    "packages/*"
+  ],
+  "description": "Cloud-Collaborative Local-First AI Research Operating System v4 (RDOS) — 연구자 육성 운영체제. 슈퍼관리자는 환경변수 기반(SUPER_ADMIN_EMAILS)으로 지정한다. 보안·실시간·스키마 정합성을 정비하고 논문가이드 기반 학습 콘텐츠를 탑재한 버전.",
+  "scripts": {
+    "dev": "turbo dev",
+    "dev:web": "turbo dev --filter=@ai-research-os/web",
+    "dev:api": "cd apps/api && uvicorn main:app --reload --port 8000",
+    "dev:desktop": "turbo dev --filter=@ai-research-os/desktop",
+    "dev:realtime": "turbo dev --filter=@ai-research-os/realtime",
+    "build": "turbo build",
+    "build:web": "turbo build --filter=@ai-research-os/web",
+    "build:api": "echo 'API(Python)는 Docker 이미지로 빌드됩니다 (infrastructure/docker)'",
+    "build:desktop": "turbo build --filter=@ai-research-os/desktop",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "clean": "turbo clean",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "typecheck": "turbo typecheck",
+    "docker:up": "docker-compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f infrastructure/docker/docker-compose.yml down",
+    "db:migrate": "supabase db push",
+    "supabase:link": "supabase link --project-ref $SUPABASE_PROJECT_REF",
+    "supabase:push": "supabase db push",
+    "supabase:reset": "supabase db reset",
+    "supabase:diff": "supabase db diff -f",
+    "supabase:lint": "supabase db lint"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.0",
+    "prettier": "^3.4.0",
+    "turbo": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,56 @@
+{
+  "name": "@ai-research-os/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "author": "AI Research OS Team",
+  "description": "AI Research OS — Electron Desktop App (Local First)",
+  "main": "dist/electron/main.js",
+  "scripts": {
+    "dev": "tsc -p tsconfig.json && electron .",
+    "build": "tsc -p tsconfig.json",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "clean": "rm -rf dist release node_modules"
+  },
+  "dependencies": {
+    "pdf-parse": "^1.1.1",
+    "@supabase/supabase-js": "^2.46.0",
+    "chokidar": "^4.0.0",
+    "electron-store": "^10.0.0",
+    "yjs": "^13.6.0",
+    "y-websocket": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "electron": "33.4.11",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.0"
+  },
+  "build": {
+    "appId": "com.ai-research-os.desktop",
+    "productName": "AI-Research-OS-RDOS-v15",
+    "directories": { "output": "C:\\Users\\saran\\OneDrive\\Desktop\\2026-6-24\\AI-Research-OS_RDOS -v15" },
+    "files": ["dist/**/*", "package.json"],
+    "extraResources": [
+      { "from": "../web/.next/standalone", "to": "web-standalone" },
+      { "from": "../web/.next/static", "to": "web-standalone/apps/web/.next/static" },
+      { "from": "../web/public", "to": "web-standalone/apps/web/public" }
+    ],
+    "icon": "build/icon.ico",
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "msi", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }]
+    }
+  }
+}
