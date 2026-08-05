@@ -1,0 +1,1 @@
+components/inspector/evidence.tsx(47,64): error TS2367: This comparison appears to be unintentional because the types '"ok" | "warn" | "danger"' and '"default"' have no overlap.
