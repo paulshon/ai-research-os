@@ -1,0 +1,11 @@
+{
+  "name": "@ai-research-os/citation-core",
+  "version": "3.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "description": "Citation Core v3.0 — Complete Citation Processing System with GROBID, Crossref, OpenAlex, Semantic Scholar, CSL Engine, and AI Validation (APA7/MLA9/Chicago/IEEE/Vancouver/Harvard/Nature)"
+}

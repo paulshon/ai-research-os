@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.next/
+out/
+.turbo/
+.env
+.env.local
+.env.*.local
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+release/
+*.asar
+coverage/
+.pytest_cache/
+
+# Nested version archives (must not be committed — breaks Vercel/GitHub)
+/AI-Research-OS_RDOS_-s-renew-ove-3/
+/AI-Research-OS_RDOS_-s-renew-ove-4/
+/AI-Research-OS_RDOS_-s-renew-ove-5/
+/AI-Research-OS_RDOS_-s-renew-ove-6/
+/AI-Research-OS_RDOS_-s-renew-ove-7/
+/AI-Research-OS_RDOS_-s-renew-ove-8/

@@ -1,0 +1,33 @@
+{
+  "name": "@ai-research-os/rdos-core",
+  "version": "64.0.0",
+  "description": "Researcher Development Operating System — 16-layer kernel/engine architecture",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "demo": "tsx demo/pipeline.demo.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "demo:membership": "tsx demo/membership.demo.ts"
+  },
+  "keywords": [
+    "research",
+    "education",
+    "kernel",
+    "engine",
+    "ai-agent",
+    "learning-os"
+  ],
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "tsx": "^4.16.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "module": "./src/index.ts"
+}

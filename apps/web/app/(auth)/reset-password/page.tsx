@@ -1,0 +1,201 @@
+"use client";
+
+import { hasClerk } from "@/hooks/use-safe-clerk";
+
+import Link from "next/link";
+import { Icon } from "@/components/ui/icon";
+
+import { useSignIn } from "@clerk/nextjs";
+import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslation } from "@/lib/i18n";
+
+function ResetPasswordPageInner() {
+  const { t } = useTranslation();
+  const { signIn, isLoaded, setActive } = useSignIn();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const code = searchParams.get("code") ?? "";
+
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showPw, setShowPw] = useState(false);
+
+  /* 비밀번호 강도 */
+  const strength = (() => {
+    if (!password) return 0;
+    let s = 0;
+    if (password.length >= 8) s++;
+    if (/[A-Z]/.test(password)) s++;
+    if (/[0-9]/.test(password)) s++;
+    if (/[^A-Za-z0-9]/.test(password)) s++;
+    return s;
+  })();
+  const strengthLabel = [
+    "",
+    t("authPages.resetPassword.strengthWeak"),
+    t("authPages.resetPassword.strengthFair"),
+    t("authPages.resetPassword.strengthStrong"),
+    t("authPages.resetPassword.strengthVeryStrong"),
+  ][strength];
+  const strengthColor = ["", "#ff7066", "#e8b84b", "#5ebd7c", "#3ecfb2"][strength];
+
+  async function handleReset(e: React.FormEvent) {
+    e.preventDefault();
+    if (!isLoaded || !code) { setError(t("authPages.resetPassword.errorInvalidLink")); return; }
+    if (password.length < 8) { setError(t("authPages.resetPassword.errorTooShort")); return; }
+    if (password !== confirm) { setError(t("authPages.resetPassword.errorMismatch")); return; }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const result = await signIn!.resetPassword({ password });
+      if (result.status === "complete") {
+        await setActive!({ session: result.createdSessionId });
+        router.push("/dashboard");
+      } else {
+        setError(t("authPages.resetPassword.errorFailed"));
+      }
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message: string; longMessage?: string }[] };
+      const msg = clerkErr?.errors?.[0]?.longMessage ?? clerkErr?.errors?.[0]?.message;
+      setError(msg ?? t("authPages.resetPassword.errorGeneric"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0d0f14] px-6 font-nanum-gothic">
+      <div className="w-full max-w-sm">
+        <div className="p-8 rounded-[20px] bg-[#13161e] border border-white/[0.06] shadow-2xl">
+
+          <div className="w-12 h-12 rounded-2xl bg-[#5ebd7c]/10 border border-[#5ebd7c]/20 flex items-center justify-center text-2xl mb-6 mx-auto">
+            <Icon name="🔐" className="inline-flex align-[-0.125em] mr-1" size={15} />
+          </div>
+
+          <h1 className="text-[20px] font-bold font-nanum-myeongjo text-[#e8eaf0] text-center mb-2">
+            {t("authPages.resetPassword.title")}
+          </h1>
+          <p className="text-[13px] text-[#9ba3b8] text-center mb-6">
+            {t("authPages.resetPassword.subtitle")}
+          </p>
+
+          <form onSubmit={handleReset} className="space-y-4">
+            {/* 새 비밀번호 */}
+            <div>
+              <label className="block text-[12px] text-[#9ba3b8] mb-1.5">{t("authPages.resetPassword.newPasswordLabel")}</label>
+              <div className="relative">
+                <input
+                  type={showPw ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(""); }}
+                  placeholder={t("authPages.resetPassword.newPasswordPlaceholder")}
+                  className="w-full px-3.5 py-2.5 pr-10 rounded-[10px] bg-[#1a1e2a] border border-white/[0.10] text-[#e8eaf0] text-[14px] placeholder:text-[#626880] outline-none focus:border-[#4a6cf7] focus:ring-2 focus:ring-[#4a6cf7]/20 transition-all"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#626880] hover:text-[#9ba3b8] text-[13px] transition-colors"
+                >
+                  {showPw ? t("authPages.resetPassword.hidePassword") : t("authPages.resetPassword.showPassword")}
+                </button>
+              </div>
+              {/* 강도 바 */}
+              {password && (
+                <div className="mt-2">
+                  <div className="flex gap-1 mb-1">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className="h-1 flex-1 rounded-full transition-colors"
+                        style={{ backgroundColor: i <= strength ? strengthColor : "rgba(255,255,255,0.07)" }}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-[11px]" style={{ color: strengthColor }}>{strengthLabel}</p>
+                </div>
+              )}
+            </div>
+
+            {/* 비밀번호 확인 */}
+            <div>
+              <label className="block text-[12px] text-[#9ba3b8] mb-1.5">{t("authPages.resetPassword.confirmPasswordLabel")}</label>
+              <input
+                type={showPw ? "text" : "password"}
+                value={confirm}
+                onChange={(e) => { setConfirm(e.target.value); setError(""); }}
+                placeholder={t("authPages.resetPassword.confirmPasswordPlaceholder")}
+                className={`w-full px-3.5 py-2.5 rounded-[10px] bg-[#1a1e2a] border text-[#e8eaf0] text-[14px] placeholder:text-[#626880] outline-none focus:ring-2 transition-all ${
+                  confirm && password !== confirm
+                    ? "border-[#ff7066]/60 focus:border-[#ff7066] focus:ring-[#ff7066]/20"
+                    : confirm && password === confirm
+                    ? "border-[#5ebd7c]/60 focus:border-[#5ebd7c] focus:ring-[#5ebd7c]/20"
+                    : "border-white/[0.10] focus:border-[#4a6cf7] focus:ring-[#4a6cf7]/20"
+                }`}
+                required
+              />
+              {confirm && password !== confirm && (
+                <p className="text-[11px] text-[#ff7066] mt-1">{t("authPages.resetPassword.mismatchError")}</p>
+              )}
+              {confirm && password === confirm && (
+                <p className="text-[11px] text-[#5ebd7c] mt-1"><Icon name="✓" className="inline-flex align-[-0.125em] mr-1" size={15} />{t("authPages.resetPassword.matchSuccess")}</p>
+              )}
+            </div>
+
+            {error && (
+              <p className="text-[12px] text-[#ff7066] bg-[#ff7066]/10 rounded-[8px] py-2 px-3">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !password || password !== confirm}
+              className={`w-full py-3 rounded-[10px] text-[14px] font-semibold transition-all ${
+                password && password === confirm && !loading
+                  ? "bg-[#4a6cf7] hover:bg-[#5d7dff] text-white shadow-lg shadow-[#4a6cf7]/20"
+                  : "bg-[#1a1e2a] text-white/20 cursor-not-allowed border border-white/[0.06]"
+              }`}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  {t("authPages.resetPassword.submitting")}
+                </span>
+              ) : (
+                t("authPages.resetPassword.submitButton")
+              )}
+            </button>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* v15: Clerk 키 미설정(오프라인 로컬 모드)이면 Clerk 훅이 throw → 로컬 모드 안내로 폴백 */
+function LocalModeNotice() {
+  const { t } = useTranslation();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0d0f14] px-6">
+      <div className="max-w-[420px] w-full p-8 rounded-[20px] bg-[#13161e] border border-white/[0.06] text-center">
+        <h1 className="text-[20px] font-bold text-[#e8eaf0] mb-3">{t("authPages.localMode.title")}</h1>
+        <p className="text-[14px] text-white/55 leading-relaxed mb-6">{t("authPages.localMode.desc")}</p>
+        <Link href="/dashboard" className="inline-flex items-center justify-center px-6 py-3 rounded-[12px] text-[14px] font-semibold bg-[#4a6cf7] text-white hover:bg-[#5d7dff] transition-all">
+          {t("authPages.localMode.enter")}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  if (!hasClerk) return <LocalModeNotice />;
+  return <ResetPasswordPageInner />;
+}

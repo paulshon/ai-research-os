@@ -1,0 +1,15 @@
+# Supabase 로컬 설정 — `supabase db push` / `supabase db reset` 로 마이그레이션 적용.
+# project_id 는 `supabase link --project-ref <ref>` 로 원격 프로젝트와 연결할 때 사용.
+project_id = "ai-research-os"
+
+[db]
+port = 54322
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+# Clerk 를 외부 인증으로 사용 → JWT 의 sub 클레임이 profiles.id(Clerk user id)와 매칭됨.

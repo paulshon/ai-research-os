@@ -1,0 +1,24 @@
+name: Web CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths: ["apps/web/**", "packages/**"]
+  pull_request:
+    branches: [main]
+    paths: ["apps/web/**", "packages/**"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # v4(감사 3.4): 저장소는 npm(package-lock.json) 기준 → pnpm 제거, npm 으로 통일
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx turbo build --filter=@ai-research-os/web
+      - run: npx turbo lint --filter=@ai-research-os/web
+      - run: npx turbo typecheck --filter=@ai-research-os/web

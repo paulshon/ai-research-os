@@ -1,0 +1,15 @@
+{
+  "name": "@rdos/hwp-convert",
+  "version": "11.0.0",
+  "private": true,
+  "type": "module",
+  "description": "HWP/HWPX → PDF 변환 마이크로서비스 (LibreOffice headless 래퍼). RDOS v11.",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs",
+    "health": "node -e \"fetch('http://localhost:7330/health').then(r=>r.json()).then(console.log)\""
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

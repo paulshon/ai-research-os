@@ -1,0 +1,880 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Google Material Symbols — Apache-2.0 */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined", sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ══════════════════════════════════════════════════════════
+   s-renew-12: 첨부 제공 폰트 전용 로딩 (원격 웹폰트 미사용)
+   NanumGothic  300/400/700/800 · NanumMyeongjo 400/700/800
+   OTF 우선 → TTF 폴백. 모든 UI 텍스트는 이 두 종만 사용한다.
+   ══════════════════════════════════════════════════════════ */
+@font-face {
+  font-family: 'NanumGothic';
+  src: url('/fonts/NanumGothicLight.otf') format('opentype'),
+       url('/fonts/NanumGothicLight.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumGothic';
+  src: url('/fonts/NanumGothic.otf') format('opentype'),
+       url('/fonts/NanumGothic.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumGothic';
+  src: url('/fonts/NanumGothicBold.otf') format('opentype'),
+       url('/fonts/NanumGothicBold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumGothic';
+  src: url('/fonts/NanumGothicExtraBold.otf') format('opentype'),
+       url('/fonts/NanumGothicExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumMyeongjo';
+  src: url('/fonts/NanumMyeongjo.otf') format('opentype'),
+       url('/fonts/NanumMyeongjo.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumMyeongjo';
+  src: url('/fonts/NanumMyeongjoBold.otf') format('opentype'),
+       url('/fonts/NanumMyeongjoBold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NanumMyeongjo';
+  src: url('/fonts/NanumMyeongjoExtraBold.otf') format('opentype'),
+       url('/fonts/NanumMyeongjoExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 모노 자리도 첨부 폰트로 대체(원격 JetBrains Mono 제거) */
+.font-mono, code, kbd, pre, samp {
+  font-family: 'NanumGothic', ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═══════════════════════════════════════════════════════
+   v27: 3가지 다크 테마 시스템
+   - 사용자가 제공한 두 샘플색 + 검정색 기반의 3개 어두운 테마
+     · midnight  : 블루-블랙  (#01030c 계열)
+     · charcoal  : 웜 차콜    (#1f1f1d 계열, 샘플 2)
+     · black     : 순수 블랙  (#000000)
+   - 세 테마 모두 "어두운" 계열이므로 텍스트는 밝게 유지 →
+     v26의 라이트/그레이 혼합으로 인한 깨짐 문제를 근본 해결
+   - 배경 표면 계단(bg→surface-deep)만 테마별로 재매핑하고
+     강조색·텍스트·테두리는 공통 유지
+   ═══════════════════════════════════════════════════════ */
+:root {
+  /* Studium R 기본(midnight) 토큰 — data-theme 미설정 시에도 안전 */
+  --bg: #0E1626;          /* 미드나잇 — 브랜드 기본 배경 */
+  --bg2: #141d30;
+  --bg3: #1b263c;
+  --bg4: #24314b;
+  --surface: #121a2b;
+  --surface-deep: #080e1a;
+
+  /* ── Studium R 브랜드 팔레트 ── */
+  --brand-midnight: #0E1626;
+  --brand-charcoal: #1B1E23;
+  --brand-black: #0A0A0B;
+  --brand-paper: #F4F1EA;
+  --brand-brass: #E0A73E;
+  --brand-brass-deep: #B8842A;
+  --brand-mute: #7C8698;
+
+  --border: rgba(255, 255, 255, 0.07);
+  --border2: rgba(255, 255, 255, 0.13);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+
+  --text: #F4F1EA;        /* 페이퍼 */
+  --text2: #7C8698;       /* 뮤트 */
+  --text3: #5b6374;
+
+  --accent: #6c8cff;
+  --accent2: #4a6cf7;
+  --gold: #E0A73E;        /* 브라스 — 브랜드 액센트 */
+  --teal: #3ecfb2;
+  --coral: #ff7066;
+  --purple: #a78bfa;
+  --green: #5ebd7c;
+  --pink: #ec4899;
+  --amber: #f59e0b;
+
+  --success: var(--green);
+  --warning: var(--gold);
+  --danger: var(--coral);
+  --info: var(--accent);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-full: 9999px;
+}
+
+/* ── 테마 1: Midnight (블루-블랙 #01030c) ── */
+[data-theme="midnight"] {
+  --bg: #0E1626;
+  --bg2: #141d30;
+  --bg3: #1b263c;
+  --bg4: #24314b;
+  --surface: #121a2b;
+  --surface-deep: #080e1a;
+}
+
+/* ── 테마 2: Charcoal (웜 차콜, 샘플 2 #1f1f1d) ── */
+[data-theme="charcoal"] {
+  --bg: #1B1E23;
+  --bg2: #23272d;
+  --bg3: #2d3138;
+  --bg4: #383d46;
+  --surface: #272b31;
+  --surface-deep: #131519;
+}
+
+/* ── 테마 3: Black (순수 블랙) ── */
+[data-theme="black"] {
+  --bg: #0A0A0B;
+  --bg2: #121213;
+  --bg3: #1b1b1d;
+  --bg4: #262628;
+  --surface: #141415;
+  --surface-deep: #000000;
+}
+
+/* ═══════════════════════════════════════════════════════
+   테마 적용 레이어
+   앱 전반이 하드코딩 색상(bg-[#0d0f14] 등)을 사용하므로,
+   data-theme에 따라 해당 하드코딩 배경값을 토큰으로 재매핑한다.
+   세 테마 모두 다크 계열 → 텍스트/강조색은 건드리지 않는다.
+   ═══════════════════════════════════════════════════════ */
+
+/* 전환 애니메이션 */
+[data-theme] body,
+[data-theme] aside,
+[data-theme] main,
+[data-theme] header,
+[data-theme] nav,
+[data-theme] section,
+[data-theme] div {
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+}
+
+/* 하드코딩 배경 hex → 테마 토큰 재매핑 (3개 테마 공통 적용) */
+[data-theme] .bg-\[\#0d0f14\] { background-color: var(--bg) !important; }
+[data-theme] .bg-\[\#0a0c10\] { background-color: var(--surface-deep) !important; }
+[data-theme] .bg-\[\#13161e\] { background-color: var(--bg2) !important; }
+[data-theme] .bg-\[\#1a1e2a\] { background-color: var(--bg3) !important; }
+[data-theme] .bg-\[\#222637\] { background-color: var(--bg4) !important; }
+[data-theme] .bg-\[\#1e2230\] { background-color: var(--surface) !important; }
+[data-theme] .bg-\[\#0f1117\] { background-color: var(--surface-deep) !important; }
+[data-theme] .bg-\[\#0f1118\] { background-color: var(--surface-deep) !important; }
+[data-theme] .bg-\[\#0f131b\] { background-color: var(--surface-deep) !important; }
+
+/* 그라데이션 정지점에 쓰인 배경 hex도 재매핑 */
+[data-theme] .to-\[\#13161e\] { --tw-gradient-to: var(--bg2) !important; }
+
+/* body 기본 배경 */
+[data-theme] body { background-color: var(--bg) !important; color: var(--text) !important; }
+
+
+body {
+  font-family: 'NanumGothic', 'IBM Plex Sans KR', sans-serif;
+  font-size: 15px; /* v5-2 기본값 */
+  /* v50: 한국어 단어가 좁은 컨테이너에서 글자 단위로 세로로 쌓이는 현상 방지.
+     keep-all → 단어(공백 단위)로만 줄바꿈, overflow-wrap → 긴 영문/URL은 비상 줄바꿈 허용 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* 나눔고딕 볼드체 — 랜딩 헤드라인 강제 적용용 (v39) */
+.font-nanum-bold {
+  font-family: 'NanumGothic', 'IBM Plex Sans KR', sans-serif !important;
+  font-weight: 800 !important;
+}
+
+/* 랜딩 페이지: 전체 글자 1포인트 축소 */
+[data-page="landing"] {
+  font-size: 14px;
+}
+
+::selection {
+  background: rgba(108, 140, 255, 0.3);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg4);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text3);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Clerk UI — 다크 테마 전역 오버라이드
+   팝오버(UserButton dropdown), 소셜 버튼, 카드 텍스트 등
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Clerk 카드/모달 공통 배경 ── */
+.cl-card,
+.cl-modalContent {
+  background-color: #13161e !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* ── 카드 내부 모든 텍스트 기본색 ── */
+.cl-card *,
+.cl-modalContent * {
+  color: inherit;
+}
+
+/* ── 헤더 텍스트 ── */
+.cl-headerTitle {
+  color: #e8eaf0 !important;
+  font-size: 19px !important;
+  font-weight: 700 !important;
+}
+.cl-headerSubtitle {
+  color: #9ba3b8 !important;
+}
+
+/* ── 소셜 버튼 (Google, GitHub) — 텍스트 안 보임 핵심 수정 ── */
+.cl-socialButtonsBlockButton {
+  background-color: #1a1e2a !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  border-radius: 10px !important;
+}
+.cl-socialButtonsBlockButton:hover {
+  background-color: #222637 !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+.cl-socialButtonsBlockButtonText {
+  color: #e8eaf0 !important;
+  font-weight: 500 !important;
+}
+.cl-socialButtonsBlockButtonArrow {
+  color: #9ba3b8 !important;
+}
+
+/* ── 구분선 ── */
+.cl-dividerLine { background-color: rgba(255, 255, 255, 0.07) !important; }
+.cl-dividerText { color: #626880 !important; }
+
+/* ── 폼 레이블 ── */
+.cl-formFieldLabel { color: #9ba3b8 !important; font-size: 12px !important; }
+
+/* ── 입력창 ── */
+.cl-formFieldInput {
+  background-color: #1a1e2a !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  color: #e8eaf0 !important;
+  font-size: 14px !important;
+  border-radius: 10px !important;
+}
+.cl-formFieldInput::placeholder { color: #626880 !important; }
+.cl-formFieldInput:focus {
+  border-color: #4a6cf7 !important;
+  box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.2) !important;
+}
+.cl-formFieldInputShowPasswordButton { color: #9ba3b8 !important; }
+
+/* ── 기본 제출 버튼 ── */
+.cl-formButtonPrimary {
+  background-color: #4a6cf7 !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+}
+.cl-formButtonPrimary:hover { background-color: #5d7dff !important; }
+
+/* ── 하단 링크/텍스트 ── */
+.cl-footerActionLink { color: #4a6cf7 !important; }
+.cl-footerActionLink:hover { color: #6c8cff !important; }
+.cl-footerActionText { color: #9ba3b8 !important; }
+
+/* ── 에러/알림 ── */
+.cl-formFieldErrorText { color: #ff7066 !important; }
+.cl-alertText { color: #ff7066 !important; }
+.cl-alert { background-color: rgba(255, 112, 102, 0.08) !important; }
+
+/* ── OTP / 인증 코드 입력 ── */
+.cl-otpCodeFieldInput {
+  background-color: #1a1e2a !important;
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  color: #e8eaf0 !important;
+  font-size: 20px !important;
+  border-radius: 10px !important;
+}
+.cl-otpCodeFieldInput:focus { border-color: #4a6cf7 !important; }
+
+/* ── 이메일 미리보기 ── */
+.cl-identityPreviewText { color: #e8eaf0 !important; }
+.cl-identityPreviewEditButton { color: #4a6cf7 !important; }
+.cl-formResendCodeLink { color: #4a6cf7 !important; }
+
+/* ═══════════════════════════════════════════════════════
+   UserButton 팝오버 (사이드바 하단)
+   Manage account / Sign out 아이콘+텍스트 완전 수정
+   ═══════════════════════════════════════════════════════ */
+
+/* 팝오버 컨테이너 */
+.cl-userButtonPopoverCard {
+  background-color: #13161e !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 14px !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6) !important;
+  padding: 6px !important;
+  min-width: 220px !important;
+}
+
+/* 사용자 이름 / 이메일 */
+.cl-userPreviewMainIdentifier {
+  color: #e8eaf0 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+.cl-userPreviewSecondaryIdentifier {
+  color: #9ba3b8 !important;
+  font-size: 11px !important;
+}
+
+/* 구분선 */
+.cl-userButtonPopoverActionsSeparator {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  margin: 4px 0 !important;
+}
+
+/* 액션 버튼 (Manage account / Sign out) */
+.cl-userButtonPopoverActionButton {
+  color: #e8eaf0 !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  transition: background-color 0.15s !important;
+}
+.cl-userButtonPopoverActionButton:hover {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+/* 버튼 텍스트 */
+.cl-userButtonPopoverActionButtonText {
+  color: #e8eaf0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+/* 버튼 아이콘 */
+.cl-userButtonPopoverActionButtonIcon {
+  color: #9ba3b8 !important;
+  opacity: 1 !important;
+}
+.cl-userButtonPopoverActionButtonIcon svg {
+  color: #9ba3b8 !important;
+  fill: currentColor !important;
+}
+
+/* Sign out 버튼 강조 */
+.cl-userButtonPopoverActionButton:last-of-type .cl-userButtonPopoverActionButtonText {
+  color: #ff7066 !important;
+}
+.cl-userButtonPopoverActionButton:last-of-type .cl-userButtonPopoverActionButtonIcon {
+  color: #ff7066 !important;
+}
+.cl-userButtonPopoverActionButton:last-of-type:hover {
+  background-color: rgba(255, 112, 102, 0.08) !important;
+}
+
+/* 팝오버 하단 Clerk 브랜드 숨김 */
+.cl-userButtonPopoverFooter { display: none !important; }
+
+/* ── 아바타 박스 ── */
+.cl-avatarBox { width: 28px !important; height: 28px !important; }
+.cl-userButtonAvatarBox { width: 28px !important; height: 28px !important; }
+
+/* ── v11: 모바일 사이드바 슬라이드 애니메이션 ── */
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-left {
+  animation: slide-in-left 0.25s ease-out;
+}
+
+/* ── v30: 하단 슬라이드업 시트 애니메이션 ── */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slide-up 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+/* ── v11: scrollbar 숨기기 ── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ══════════════════════════════════════════
+   v21: 모바일 전용 수정 사항
+   ══════════════════════════════════════════ */
+
+/* 모바일에서 iOS safe-area 대응 */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mobile-safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   v49: iOS 모바일 버전 최적화
+   - 데스크탑/태블릿/모바일(안드로이드)에 더해 iOS(아이폰·아이패드) 전용 처리
+   - <html data-os="ios"> (페인트 전 설정)에만 적용 → 다른 플랫폼 영향 없음
+   ═══════════════════════════════════════════════════════ */
+html[data-os="ios"] {
+  -webkit-tap-highlight-color: transparent;        /* 탭 시 회색 하이라이트 제거 */
+  -webkit-text-size-adjust: 100%;                  /* 가로 전환 시 글자 크기 튐 방지 */
+}
+html[data-os="ios"] body {
+  /* iOS Safari 동적 툴바 대응: dvh 사용 가능 시 정확한 뷰포트 높이 */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+/* iOS는 입력 포커스 시 폰트<16px이면 화면을 강제 확대(zoom)함 → 16px로 고정 */
+@media (max-width: 1023px) {
+  html[data-os="ios"] input,
+  html[data-os="ios"] textarea,
+  html[data-os="ios"] select {
+    font-size: 16px !important;
+  }
+}
+/* iOS 관성 스크롤 + 바운스 격리 */
+html[data-os="ios"] main,
+html[data-os="ios"] .overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+/* iOS standalone(홈 화면 추가)에서 상단/하단 시스템 영역 확보 */
+html[data-os="ios"][data-standalone="true"] .ios-standalone-safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* 모바일 터치 스크롤 개선 */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 모바일 탭 패널 내 overflow 처리 */
+@media (max-width: 1023px) {
+  /* 모바일 페이지 컨텐츠 스크롤 */
+  .page-content {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    max-height: calc(100vh - 3.5rem - env(safe-area-inset-bottom, 0px));
+  }
+
+  /* 그리드 레이아웃 모바일 최적화 */
+  .grid-cols-3-mobile-1 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 모바일에서 탭 텍스트 overflow 방지 */
+  .tab-scroll {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .tab-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 텍스트 입력 영역 모바일 zoom 방지 (iOS) */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* 버튼/카드 터치 영역 최소 크기 */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* v21: 모바일 엔진 확장 패널 슬라이드 애니메이션 */
+@keyframes slide-down {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-down {
+  animation: slide-down 0.18s ease-out;
+}
+
+/* v21: 페이지별 스크롤 컨테이너 */
+.page-scroll-container {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* ═══════════════════════════════════════════════════════
+   v43: 모바일(≤767px) 전체 글자 -1.5pt(≈-2px) 축소
+   - 데스크탑/태블릿(≥768px)은 영향 없음
+   - 12px 미만의 보조 라벨은 가독성 위해 유지
+   - 랜딩 히어로 헤드라인은 인라인 clamp라 미적용(별도 +2pt 처리)
+   ═══════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+  .text-\[12px\] { font-size: 10px !important; }
+  .text-\[12\.5px\] { font-size: 10.5px !important; }
+  .text-\[13px\] { font-size: 11px !important; }
+  .text-\[13\.5px\] { font-size: 11.5px !important; }
+  .text-\[14px\] { font-size: 12px !important; }
+  .text-\[14\.5px\] { font-size: 12.5px !important; }
+  .text-\[15px\] { font-size: 13px !important; }
+  .text-\[15\.5px\] { font-size: 13.5px !important; }
+  .text-\[16px\] { font-size: 14px !important; }
+  .text-\[17px\] { font-size: 15px !important; }
+  .text-\[18px\] { font-size: 16px !important; }
+  .text-\[19px\] { font-size: 17px !important; }
+  .text-\[20px\] { font-size: 18px !important; }
+  .text-\[21px\] { font-size: 19px !important; }
+  .text-\[22px\] { font-size: 20px !important; }
+  .text-\[23px\] { font-size: 21px !important; }
+  .text-\[24px\] { font-size: 22px !important; }
+  .text-\[25px\] { font-size: 23px !important; }
+  .text-\[26px\] { font-size: 24px !important; }
+  .text-\[27px\] { font-size: 25px !important; }
+  .text-\[28px\] { font-size: 26px !important; }
+  .text-\[31px\] { font-size: 29px !important; }
+  .text-\[32px\] { font-size: 30px !important; }
+  .text-\[34px\] { font-size: 32px !important; }
+  .text-\[35px\] { font-size: 33px !important; }
+  .text-\[37px\] { font-size: 35px !important; }
+  .text-\[39px\] { font-size: 37px !important; }
+  .text-\[40px\] { font-size: 38px !important; }
+  .text-\[43px\] { font-size: 41px !important; }
+  .text-\[47px\] { font-size: 45px !important; }
+}
+
+/* ═══════════════════════════════════════════════════════
+   v49: 데스크탑·태블릿(≥768px) 전체 글자 -1.5pt(≈-2px) 축소
+   - v43의 모바일(≤767px) -1.5pt 규칙과 합쳐 모든 버전
+     (데스크탑/태블릿/모바일 안드로이드/iOS)이 동일하게 -1.5pt 적용됨
+   - 모바일은 기존 규칙만 적용되어 이중 축소되지 않음
+   - 12px 미만 보조 라벨은 가독성 위해 유지
+   ═══════════════════════════════════════════════════════ */
+@media (min-width: 768px) {
+  .text-\[12px\] { font-size: 10px !important; }
+  .text-\[12\.5px\] { font-size: 10.5px !important; }
+  .text-\[13px\] { font-size: 11px !important; }
+  .text-\[13\.5px\] { font-size: 11.5px !important; }
+  .text-\[14px\] { font-size: 12px !important; }
+  .text-\[14\.5px\] { font-size: 12.5px !important; }
+  .text-\[15px\] { font-size: 13px !important; }
+  .text-\[15\.5px\] { font-size: 13.5px !important; }
+  .text-\[16px\] { font-size: 14px !important; }
+  .text-\[17px\] { font-size: 15px !important; }
+  .text-\[18px\] { font-size: 16px !important; }
+  .text-\[19px\] { font-size: 17px !important; }
+  .text-\[20px\] { font-size: 18px !important; }
+  .text-\[21px\] { font-size: 19px !important; }
+  .text-\[22px\] { font-size: 20px !important; }
+  .text-\[23px\] { font-size: 21px !important; }
+  .text-\[24px\] { font-size: 22px !important; }
+  .text-\[25px\] { font-size: 23px !important; }
+  .text-\[26px\] { font-size: 24px !important; }
+  .text-\[27px\] { font-size: 25px !important; }
+  .text-\[28px\] { font-size: 26px !important; }
+  .text-\[30px\] { font-size: 28px !important; }
+  .text-\[31px\] { font-size: 29px !important; }
+  .text-\[32px\] { font-size: 30px !important; }
+  .text-\[34px\] { font-size: 32px !important; }
+  .text-\[35px\] { font-size: 33px !important; }
+  .text-\[37px\] { font-size: 35px !important; }
+  .text-\[39px\] { font-size: 37px !important; }
+  .text-\[40px\] { font-size: 38px !important; }
+  .text-\[43px\] { font-size: 41px !important; }
+  .text-\[47px\] { font-size: 45px !important; }
+  .text-\[52px\] { font-size: 50px !important; }
+}
+
+/* ════════════════════════════════════════════════════════════
+   v4: RDOS 레슨 본문(HTML) 스타일 — 논문가이드 학습 콘텐츠 렌더링
+═══════════════════════════════════════════════════════════════ */
+.rdos-lesson-body h3 {
+  font-size: 15px; font-weight: 700; color: #cdd3e0;
+  margin: 18px 0 8px;
+}
+.rdos-lesson-body h3:first-child { margin-top: 0; }
+.rdos-lesson-body p { margin: 8px 0; color: rgba(255,255,255,0.72); }
+.rdos-lesson-body ul { margin: 8px 0 8px 4px; padding-left: 18px; list-style: disc; }
+.rdos-lesson-body li { margin: 5px 0; color: rgba(255,255,255,0.7); }
+.rdos-lesson-body strong { color: #e8eaf0; font-weight: 600; }
+.rdos-lesson-body .term {
+  color: #7fe6cf; font-weight: 600; padding: 0 2px;
+  border-bottom: 1px dashed rgba(62,207,178,0.4);
+}
+.rdos-lesson-body .highlight {
+  background: rgba(124,147,255,0.1); border-left: 3px solid #7c93ff;
+  border-radius: 8px; padding: 10px 14px; margin: 12px 0;
+  color: #c9d2f0; font-size: 13px;
+}
+.rdos-lesson-body .example {
+  background: rgba(232,184,75,0.08); border: 1px solid rgba(232,184,75,0.2);
+  border-radius: 8px; padding: 10px 14px; margin: 12px 0;
+  color: #e8d7a8; font-size: 12.5px; line-height: 1.7;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   s-renew-12 · IMMERSIVE LAYER
+   Atmosphere(앰비언트 광원·그리드·그레인) / Glass / Hero / EXPERT /
+   Ribbon Stepper / 미시 인터랙션 / 모바일 세이프에어리어 유틸
+   ─ 강조색은 --imm-ac 하나로 흐르며, 메뉴 이동 시 전역이 부드럽게 물든다.
+   ══════════════════════════════════════════════════════════════════════ */
+:root {
+  --imm-ac: #6c8cff;
+  --imm-ease: cubic-bezier(.2,.8,.2,1);
+  --imm-safe-t: env(safe-area-inset-top, 0px);
+  --imm-safe-b: env(safe-area-inset-bottom, 0px);
+  --imm-safe-l: env(safe-area-inset-left, 0px);
+  --imm-safe-r: env(safe-area-inset-right, 0px);
+  --imm-tabbar: 62px;
+}
+
+/* ── Atmosphere ─────────────────────────────────────────── */
+.imm-ambient { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.imm-orb {
+  position: absolute; border-radius: 9999px; filter: blur(90px); opacity: .42;
+  transition: background 1.1s var(--imm-ease), transform 1.6s var(--imm-ease), opacity .9s ease;
+  will-change: background, transform;
+}
+.imm-orb-a { width: 620px; height: 620px; left: -170px; top: -210px; }
+.imm-orb-b { width: 520px; height: 520px; right: -150px; top: 32%; }
+.imm-orb-c { width: 460px; height: 460px; left: 20%; bottom: -240px; }
+@media (max-width: 767px) {
+  .imm-orb { filter: blur(64px); opacity: .34; }
+  .imm-orb-a { width: 380px; height: 380px; left: -130px; top: -150px; }
+  .imm-orb-b { width: 320px; height: 320px; right: -120px; top: 38%; }
+  .imm-orb-c { width: 300px; height: 300px; left: 8%; bottom: -160px; }
+}
+.imm-grid {
+  position: absolute; inset: 0; opacity: .38;
+  background:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px) 0 0 / 100% 64px,
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px) 0 0 / 64px 100%;
+}
+.imm-grain {
+  position: absolute; inset: 0; opacity: .035; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Glass ──────────────────────────────────────────────── */
+.imm-glass {
+  background: color-mix(in srgb, var(--bg2, #13161e) 72%, transparent);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid var(--border, rgba(255,255,255,.07));
+}
+.imm-glass-strong {
+  background: color-mix(in srgb, var(--bg2, #13161e) 88%, transparent);
+  backdrop-filter: blur(26px) saturate(150%);
+  -webkit-backdrop-filter: blur(26px) saturate(150%);
+}
+
+/* ── Hero ───────────────────────────────────────────────── */
+.imm-hero { position: relative; overflow: hidden; border-radius: 26px; }
+.imm-hero-glow {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(520px 240px at 88% -12%, color-mix(in srgb, var(--imm-ac) 34%, transparent), transparent 62%),
+    radial-gradient(420px 300px at -6% 122%, color-mix(in srgb, var(--imm-ac) 16%, transparent), transparent 62%);
+}
+.imm-hero-edge { position: absolute; inset: 0; border-radius: 26px; pointer-events: none; box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+@media (max-width: 767px) { .imm-hero, .imm-hero-edge { border-radius: 20px; } }
+
+/* ── EXPERT 버튼 (sheen) ────────────────────────────────── */
+.imm-expert {
+  position: relative; overflow: hidden; color: #fff;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--imm-ac) 88%, #000), color-mix(in srgb, var(--imm-ac) 56%, #000));
+  box-shadow: 0 8px 26px color-mix(in srgb, var(--imm-ac) 34%, transparent);
+  transition: transform .25s var(--imm-ease), box-shadow .25s var(--imm-ease);
+}
+.imm-expert:hover { transform: translateY(-2px); box-shadow: 0 12px 34px color-mix(in srgb, var(--imm-ac) 46%, transparent); }
+.imm-expert::after {
+  content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent);
+  transform: skewX(-20deg); animation: immSheen 4.6s ease-in-out infinite;
+}
+@keyframes immSheen { 0%, 62% { left: -60%; } 82%, 100% { left: 132%; } }
+
+/* ── Ribbon stepper ─────────────────────────────────────── */
+.imm-rstep { transition: background .25s var(--imm-ease), color .25s var(--imm-ease), box-shadow .25s var(--imm-ease); }
+.imm-rstep-dot { transition: all .25s var(--imm-ease); }
+.imm-rcon { width: 16px; height: 2px; border-radius: 2px; background: var(--border2, rgba(255,255,255,.13)); flex-shrink: 0; overflow: hidden; position: relative; }
+.imm-rcon-fill::after { content: ""; position: absolute; inset: 0; background: var(--green, #5ebd7c); }
+
+/* ── 미시 인터랙션 ──────────────────────────────────────── */
+.imm-lift { transition: transform .28s var(--imm-ease), border-color .28s var(--imm-ease), box-shadow .28s var(--imm-ease); }
+.imm-lift:hover { transform: translateY(-3px); }
+.imm-cardglow { position: absolute; inset: 0; opacity: 0; transition: opacity .3s ease; pointer-events: none;
+  background: radial-gradient(200px 120px at 100% 0%, color-mix(in srgb, var(--imm-ac) 22%, transparent), transparent 62%); }
+.imm-lift:hover .imm-cardglow, .imm-on .imm-cardglow { opacity: 1; }
+.imm-rise { opacity: 0; transform: translateY(14px); animation: immRise .55s var(--imm-ease) forwards; }
+@keyframes immRise { to { opacity: 1; transform: none; } }
+.imm-fade { animation: immFade .5s var(--imm-ease); }
+@keyframes immFade { from { opacity: 0; transform: translateY(10px) scale(.995); } to { opacity: 1; transform: none; } }
+.imm-reveal { opacity: 0; max-height: 0; overflow: hidden; transition: opacity .5s var(--imm-ease), max-height .5s var(--imm-ease); }
+.imm-reveal-on { opacity: 1; max-height: 3000px; }
+.imm-spin { animation: immSpin .7s linear infinite; }
+@keyframes immSpin { to { transform: rotate(360deg); } }
+
+/* ── 모바일 safe-area 유틸 ──────────────────────────────── */
+.imm-pt-safe { padding-top: var(--imm-safe-t); }
+.imm-pb-safe { padding-bottom: var(--imm-safe-b); }
+.imm-px-safe { padding-left: var(--imm-safe-l); padding-right: var(--imm-safe-r); }
+.imm-h-appbar { height: calc(56px + var(--imm-safe-t)); }
+.imm-pb-tabbar { padding-bottom: calc(var(--imm-tabbar) + var(--imm-safe-b) + 12px); }
+.imm-tabbar { padding-bottom: var(--imm-safe-b); }
+/* 안드로이드 제스처 바 / iOS 홈 인디케이터 양쪽 대응 */
+@supports not (padding: env(safe-area-inset-bottom)) { .imm-tabbar { padding-bottom: 6px; } }
+/* 터치 타깃 최소 44px (Apple HIG / Material) */
+.imm-touch { min-width: 44px; min-height: 44px; }
+.imm-noscroll { overflow: hidden; overscroll-behavior: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* 저사양·모션 최소화 환경 존중 */
+@media (prefers-reduced-motion: reduce) {
+  .imm-orb, .imm-lift, .imm-rise, .imm-fade, .imm-reveal, .imm-expert, .imm-expert::after {
+    animation: none !important; transition: none !important; transform: none !important;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   s-renew-14 · 중국어(간체) 조판 보정
+   NanumMyeongjo / NanumGothic / Noto Serif KR 계열은 한국어 전용 폰트라
+   간체 한자 글리프가 없다. 언어를 ZH 로 바꾸면 제목이 글리프 폴백에
+   실패하면서 글자가 잘리거나 세로로 깨져 보였다(스크린샷 8).
+   html[lang] 은 i18n 프로바이더가 zh 선택 시 "zh-CN" 으로 갱신하므로,
+   그 조건에서만 중국어 CJK 폰트 스택을 앞에 세운다.
+   ══════════════════════════════════════════════════════════════════════ */
+html[lang^="zh"] body,
+html[lang^="zh"] .font-nanum-gothic {
+  font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC",
+    "Microsoft YaHei", "Hiragino Sans GB", "Heiti SC", sans-serif;
+}
+
+html[lang^="zh"] .font-nanum-myeongjo,
+html[lang^="zh"] .font-serif,
+html[lang^="zh"] .font-display {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "STSong",
+    SimSun, "Noto Serif CJK SC", serif;
+}
+
+/* 한자는 음절 단위 줄바꿈이 정상이므로 한국어용 keep-all 을 풀어준다.
+   또한 좁은 컨테이너에서 글자가 잘리지 않도록 넘침 규칙을 명시한다. */
+html[lang^="zh"] h1,
+html[lang^="zh"] h2,
+html[lang^="zh"] h3,
+html[lang^="zh"] p {
+  word-break: normal;
+  overflow-wrap: break-word;
+  line-break: strict;
+}
+
+/* 히어로 대형 카피 — 어떤 언어에서도 줄이 잘리지 않게 방어 */
+.imm-hero h1 > span {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+/* ZH 는 자간이 넓어 보이므로 대형 카피의 음수 자간을 완화한다 */
+html[lang^="zh"] .imm-hero h1 {
+  letter-spacing: -0.005em;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   s-renew-18 · 모바일 드로어 — 컴팩트 모드 철회
+   s-renew-17 에서 드로어를 42vw(최대 180px)로 좁히고 글자·아이콘·여백을
+   한 단계씩 줄였더니 브랜드명("Studium…")·프로젝트명이 잘렸다.
+   → 참고 디자인(methodos)처럼 데스크톱 사이드바와 같은 크기로 되돌린다.
+   드로어 폭은 각 셸에서 268px 로 넓혔고(부모), 여기서는 폭만 부모에 맞춘다.
+   축소용 오버라이드(글자 12px·아이콘 26px 등)는 모두 제거.
+   바탕은 더 투명한 프로스티드 글래스로 띄워 뒤 배경이 은은히 비치게 한다.
+   ══════════════════════════════════════════════════════════════════════ */
+.imm-drawer aside { width: 100%; }
+/* 모바일 드로어 바탕 — 반투명 유리(참고 디자인의 글래스이펙트) */
+.imm-drawer.imm-glass-strong,
+.imm-drawer .imm-glass-strong {
+  background: color-mix(in srgb, var(--bg2, #13161e) 58%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  backdrop-filter: blur(28px) saturate(160%);
+}
