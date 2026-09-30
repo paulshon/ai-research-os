@@ -3,6 +3,7 @@ import {
   rankScholarPapers,
   type ScholarMethodBoost,
 } from "@/lib/literature/scholar-ranking";
+import { searchLlb } from "@/lib/literature/llb-search";
 
 /**
  * /api/scholar — 실제 학술 메타데이터 검색 API (v9)
@@ -45,6 +46,7 @@ interface PaperResult {
   keywords: string[];
   source: string;
   similarity: number;
+  meta?: Record<string, any>;
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -406,6 +408,66 @@ function isKorean(paper: PaperResult): boolean {
   return false;
 }
 
+/** LLB — 정규화된 서빙 표(openalex.lit_papers)를 파라미터 질의로 검색. 실패 시 예외를 던진다(호출부가 대체 소스 사용을 명시해야 함). */
+function llbOptsFromParams(sp: URLSearchParams, query: string, limit: number, region: string) {
+  const list = (k: string) => (sp.get(k) ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  const num = (k: string) => (sp.get(k) ? Number(sp.get(k)) : undefined);
+  return {
+    q: query.slice(0, 200),
+    limit,
+    offset: num("offset"),
+    yearFrom: num("yearFrom"),
+    yearTo: num("yearTo"),
+    lang: sp.get("lang") || undefined,
+    indexes: list("indexes"),
+    minJif: num("minJif"),
+    jifQuartile: sp.get("jifQuartile") || undefined,
+    oaOnly: sp.get("oaOnly") === "1",
+    hasAbstract: sp.get("hasAbstract") === "1",
+    citableOnly: sp.get("citableOnly") !== "0",
+    sort: sp.get("sort") || "relevance",
+    domestic: region === "domestic" ? true : undefined,
+    area: sp.get("area") || undefined,
+    types: list("types"),
+  };
+}
+
+function llbRowToPaper(row: any, i: number, maxScore: number): PaperResult {
+  const doi = String(row.doi ?? "");
+  const authors: string[] = Array.isArray(row.author_names) ? row.author_names : [];
+  const conflict = Number(row.meta_conflict ?? 0) > 0;
+  return {
+    id: String(row.id ?? `llb_${i}`),
+    title: String(row.title ?? "Untitled"),
+    authors: authors.slice(0, 8).join(", ") || String(row.first_author ?? ""),
+    year: Number(row.year) > 0 ? Number(row.year) : null,
+    journal: String(row.journal ?? ""),
+    abstract: String(row.abstract ?? "").slice(0, 900),
+    doi,
+    url: String(row.doi_url || row.pdf_url || row.id || ""),
+    citations: Number(row.cited ?? 0),
+    keywords: Array.isArray(row.keywords) ? row.keywords.slice(0, 8) : [],
+    source: "LLB",
+    similarity: maxScore > 0 ? Math.max(0.05, Math.min(0.99, Number(row.score) / maxScore)) : 0.5,
+    meta: {
+      type: row.type, lang: row.lang, area: row.area, field: row.field, topic: row.topic,
+      fwci: Number(row.fwci ?? 0), citePct: Number(row.cite_pct ?? 0), isOa: !!Number(row.is_oa), pdfUrl: row.pdf_url || "",
+      pmid: Number(row.pmid) || null, journalId: Number(row.journal_id) || null, issnL: row.issn_l || "",
+      indexes: ["scie", "ssci", "ahci", "esci", "scopus", "kci", "doaj"].filter((k) => Number(row["in_" + k])),
+      jif: Number(row.jif) || null, jifQ: row.jif_q || "", jifEst: Number(row.jif_est) || null, journalH: Number(row.j_h) || null,
+      countries: row.countries ?? [], isKr: !!Number(row.is_kr),
+      // 오결합 의심: DOI가 다른 논문과 겹치거나 저널의 주 분야와 모순 — 화면에서 저널 지표를 흐리게 표시할 것
+      suspect: conflict,
+    },
+  };
+}
+
+async function searchLocalLlb(sp: URLSearchParams, query: string, limit: number, region: string) {
+  const r = await searchLlb(llbOptsFromParams(sp, query, limit, region));
+  const max = Math.max(0, ...r.results.map((x: any) => Number(x.score) || 0));
+  return { total: r.total, lowerBound: !!r.totalIsLowerBound, stage: r.stage, ms: r.ms, results: r.results.map((x: any, i: number) => llbRowToPaper(x, i, max)) };
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // GET Handler
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -414,6 +476,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const query = searchParams.get("q")?.trim() ?? "";
   const region = searchParams.get("region") ?? "all";
+  const corpus = (searchParams.get("corpus") ?? "l1").toLowerCase();
   // v41: 해외 검색 최대 추출량 확대 (기존 50 → 200). 소스별 API 한계는 아래에서 별도 제한.
   const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") ?? "30", 10)));
   const methodParam = (searchParams.get("method") ?? "all") as ScholarMethodBoost;
@@ -435,6 +498,63 @@ export async function GET(req: NextRequest) {
   const kciKey = process.env.KCI_API_KEY ?? searchParams.get("kciKey") ?? "";
 
   try {
+    // ── LLB: 로컬문헌기반 (정규화 서빙 표 lit_papers) ──
+    if (corpus === "llb") {
+      let llbError = "";
+      try {
+        const local = await searchLocalLlb(searchParams, query, limit, region);
+        // 로컬 코퍼스가 정상이면 0건이어도 그대로 0건으로 알린다(공개 API 결과를 LLB 결과처럼 섞지 않음).
+        return NextResponse.json({
+          results: local.results,
+          total: local.results.length,
+          matched: local.total,
+          matchedIsLowerBound: local.lowerBound,
+          stage: local.stage,
+          ms: local.ms,
+          sources: ["LLB (openalex.lit_papers)"],
+          region,
+          corpus: "llb",
+          fallback: false,
+          note: local.results.length === 0 ? "로컬 코퍼스에 조건에 맞는 논문이 없습니다. 검색어·필터를 완화해 보세요." : undefined,
+        });
+      } catch (e: any) {
+        llbError = String(e?.message ?? e).slice(0, 200);
+      }
+
+      // 로컬 ClickHouse 오류 시에만 공개 API로 대체하고, 응답에 대체임을 명시한다(source·fallback·note).
+      let fallback: PaperResult[] = [];
+      const activeSources: string[] = ["공개 API 대체 → OpenAlex", "CrossRef"];
+      if (region === "domestic") {
+        const settled = await Promise.allSettled([
+          searchOpenAlex(query, limit, "institutions.country_code:KR"),
+          searchCrossRef(query + " Korea Korean", limit),
+        ]);
+        for (const r of settled) if (r.status === "fulfilled") fallback.push(...r.value);
+        fallback = fallback.filter((p) => isKorean(p));
+      } else {
+        const settled = await Promise.allSettled([
+          searchOpenAlex(query, Math.min(limit, 100)),
+          searchCrossRef(query, Math.min(limit, 100)),
+        ]);
+        for (const r of settled) if (r.status === "fulfilled") fallback.push(...r.value);
+        if (region === "international") fallback = fallback.filter((p) => !isKorean(p));
+      }
+      fallback = rankScholarPapers(dedup(fallback), { method, projectKeywords }).map((p) => ({
+        ...p,
+        source: `대체·${p.source}`,
+      }));
+      return NextResponse.json({
+        results: fallback,
+        total: fallback.length,
+        sources: activeSources,
+        region,
+        corpus: "llb",
+        fallback: true,
+        llbError,
+        note: "로컬 LLB(ClickHouse)에 연결하지 못해 공개 API 결과로 대체했습니다. 이 결과에는 저널 등급·JIF·fwci가 없습니다.",
+      });
+    }
+
     let allResults: PaperResult[] = [];
     const activeSources: string[] = [];
 

@@ -56,6 +56,8 @@ export const EXPERT_META: PageMeta[] = [
     backTo: { href: "/research",   key: "structure" } },
   { href: "/literature-review", id: "literatureReview", accent: "#3ecfb2", icon: "litReview", hero: false,
     backTo: { href: "/literature", key: "literatureReview" } },
+  { href: "/llb", id: "literatureReview", accent: "#e8b84b", icon: "litReview", hero: false,
+    backTo: { href: "/literature", key: "literatureReview" } },
   { href: "/method/basic-stats",id: "basicStats",       accent: "#6c8cff", icon: "chart",     hero: false,
     backTo: { href: "/method",     key: "basicStats" } },
   { href: "/editor",            id: "editor",           accent: "#a78bfa", icon: "edit",      hero: false,

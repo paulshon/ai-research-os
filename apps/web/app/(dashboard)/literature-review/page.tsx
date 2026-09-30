@@ -11,6 +11,7 @@ import LiteratureAnalyticsPanel, {
   type GraphVisualStyle,
 } from "@/components/literature/literature-analytics-panel";
 import LiteratureEngineTools from "@/components/literature/literature-engine-tools";
+import CorpusModeToggle from "@/components/literature/corpus-mode-toggle";
 import { useAppStore } from "@/store/app-store";
 import {
   buildNetworkSummaryFromMeta,
@@ -573,7 +574,8 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
         >
           <Icon name="🔬" className="inline-flex align-[-0.125em] mr-1" size={15} />{t("litReview.title")}
         </button>
-        <span className="text-[13px] text-white/30">{t("litReview.selectedCount")}: {selectedDBs.length} DBs</span>
+        <CorpusModeToggle mode="l1" l1Href="/literature-review" llbHref="/llb/search" size="sm" />
+        <span className="text-[13px] text-white/30 ml-auto">{t("litReview.selectedCount")}: {selectedDBs.length} DBs</span>
       </div>
 
       {/* ── v23: 모바일 드로어 백드롭 ── */}
@@ -594,10 +596,14 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
           </button>
         </div>
         <div className="p-4 border-b border-white/[0.04]">
-          <h2 className="text-[17px] font-semibold flex items-center gap-1.5">
-            <span><Icon name="🔬" className="inline-flex align-[-0.125em] mr-1" size={15} /></span> {t("litReview.title")}
-          </h2>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-[17px] font-semibold flex items-center gap-1.5 min-w-0">
+              <span><Icon name="🔬" className="inline-flex align-[-0.125em] mr-1" size={15} /></span> {t("litReview.title")}
+            </h2>
+            <CorpusModeToggle mode="l1" l1Href="/literature-review" llbHref="/llb/search" size="sm" />
+          </div>
           <p className="text-[14px] text-white/25 mt-1">{t("litReview.desc")}</p>
+          <p className="text-[12px] text-[#3ecfb2]/70 mt-1">L1 · 공개 API 문헌연구엔진</p>
         </div>
 
         {/* 검색 입력 */}

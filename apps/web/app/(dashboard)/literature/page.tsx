@@ -13,6 +13,7 @@ import {
   type CanonicalCitation,
 } from "@ai-research-os/citation-core";
 import { upsertLinkedResult, type LinkedPaper } from "@/lib/writing/linked-results-bridge";
+import CorpusModeToggle, { type CorpusMode } from "@/components/literature/corpus-mode-toggle";
 
 const LIT_TABS = [
   { id: "search", icon: "🔍", label: "literaturePage.tabSearch" },
@@ -53,6 +54,7 @@ export default function LiteraturePage() {
   const [gapResult, setGapResult] = useState("");
   const [userNotes, setUserNotes] = useState("");
   const [searchRegion, setSearchRegion] = useState<"domestic" | "international">("domestic");
+  const [corpusMode, setCorpusMode] = useState<CorpusMode>("l1");
   const { generate, loading: aiLoading } = useGemini();
 
   // Persistence
@@ -109,7 +111,10 @@ export default function LiteraturePage() {
     if (!searchQuery.trim()) return;
     setSearchLoading(true);
     try {
-      const res = await fetch(`/api/scholar?q=${encodeURIComponent(searchQuery)}&region=${searchRegion}&limit=20`);
+      const corpusQ = corpusMode === "llb" ? "&corpus=llb" : "";
+      const res = await fetch(
+        `/api/scholar?q=${encodeURIComponent(searchQuery)}&region=${searchRegion}&limit=20${corpusQ}`,
+      );
       const data = await res.json();
       const results: ReferenceItem[] = (data.results ?? []).map((r: any) => ({
         id: r.id ?? crypto.randomUUID(),
@@ -253,19 +258,47 @@ export default function LiteraturePage() {
         <div className="max-w-[1680px] mx-auto">
           {tab === "search" && (
             <div>
-              <h2 className="text-[21px] font-bold font-nanum-myeongjo mb-4">{t("literaturePage.searchExploreTitle")}</h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <h2 className="text-[21px] font-bold font-nanum-myeongjo">
+                  {t("literaturePage.searchExploreTitle")}
+                </h2>
+                <CorpusModeToggle mode={corpusMode} onChange={setCorpusMode} />
+              </div>
+              <p className="text-[13px] text-white/30 mb-4">
+                {corpusMode === "l1"
+                  ? "L1 · 공개 API 문헌검색 (OpenAlex · CrossRef · Semantic Scholar 등)"
+                  : "LLB · 로컬문헌기반 (F 메타원천고 · L 검색허브 · K 전문저장고)"}
+                {corpusMode === "llb" && (
+                  <>
+                    {" · "}
+                    <Link href="/llb/search" className="text-[#e8b84b]/80 hover:text-[#e8b84b]">
+                      LLB 문헌연구엔진 열기 →
+                    </Link>
+                  </>
+                )}
+              </p>
               <div className="flex gap-3 mb-4">
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className="flex-1 px-4 py-3 bg-[#13161e] border border-white/[0.06] rounded-xl text-[16px] text-white placeholder:text-white/20 focus:outline-none focus:border-[#3ecfb2]"
-                  placeholder={t("literaturePage.searchPlaceholder")}
+                  className={`flex-1 px-4 py-3 bg-[#13161e] border border-white/[0.06] rounded-xl text-[16px] text-white placeholder:text-white/20 focus:outline-none ${
+                    corpusMode === "llb" ? "focus:border-[#e8b84b]" : "focus:border-[#3ecfb2]"
+                  }`}
+                  placeholder={
+                    corpusMode === "llb"
+                      ? "LLB 로컬 코퍼스에서 검색…"
+                      : t("literaturePage.searchPlaceholder")
+                  }
                 />
                 <button
                   onClick={handleSearch}
                   disabled={searchLoading}
-                  className="px-5 py-3 bg-[#3ecfb2]/15 border border-[#3ecfb2]/30 text-[#3ecfb2] rounded-xl text-[16px] font-medium hover:bg-[#3ecfb2]/25 transition-all disabled:opacity-40"
+                  className={`px-5 py-3 rounded-xl text-[16px] font-medium transition-all disabled:opacity-40 ${
+                    corpusMode === "llb"
+                      ? "bg-[#e8b84b]/15 border border-[#e8b84b]/30 text-[#e8b84b] hover:bg-[#e8b84b]/25"
+                      : "bg-[#3ecfb2]/15 border border-[#3ecfb2]/30 text-[#3ecfb2] hover:bg-[#3ecfb2]/25"
+                  }`}
                 >
                   {searchLoading ? t("literaturePage.searching") : t("literaturePage.search")}
                 </button>
@@ -284,7 +317,11 @@ export default function LiteraturePage() {
                 <button
                   onClick={() => setSearchRegion("international")}
                   className={`px-3 py-1.5 rounded-lg text-[15px] transition-all ${
-                    searchRegion === "international" ? "bg-[#3ecfb2]/15 text-[#3ecfb2] border border-[#3ecfb2]/30" : "text-white/30 border border-transparent"
+                    searchRegion === "international"
+                      ? corpusMode === "llb"
+                        ? "bg-[#e8b84b]/15 text-[#e8b84b] border border-[#e8b84b]/30"
+                        : "bg-[#3ecfb2]/15 text-[#3ecfb2] border border-[#3ecfb2]/30"
+                      : "text-white/30 border border-transparent"
                   }`}
                 >
                   <Icon name="🌐" className="inline-flex align-[-0.125em] mr-1" size={15} />{t("literaturePage.international")}
