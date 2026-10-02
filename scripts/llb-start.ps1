@@ -5,12 +5,18 @@
 #         SUPABASE_URL=https://xxxx.supabase.co
 #         SUPABASE_SERVICE_ROLE_KEY=eyJ...   (service_role 키. 비밀번호와 같으니 어디에도 올리지 말 것)
 $ErrorActionPreference = 'Stop'
+# 방금 설치한 cloudflared 를 열린 창이 아직 모르는 경우를 위해 PATH 를 다시 읽는다
+$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 $root = Split-Path $PSScriptRoot -Parent
 $envFile = 'E:\CH_lit\llb-access.env'
 
 docker start lit-ch | Out-Null
 for ($i = 0; $i -lt 30; $i++) { try { if ((Invoke-RestMethod http://127.0.0.1:8123/ping -TimeoutSec 3) -match 'Ok') { break } } catch {}; Start-Sleep 5 }
-Get-Content $envFile | ForEach-Object { if ($_ -match '^(\w+)=(.*)$') { Set-Item "env:$($Matches[1])" $Matches[2] } }
+# UTF-8 로 읽고(BOM 무시), 값 앞뒤의 공백·따옴표·꺾쇠를 제거한다
+Get-Content $envFile -Encoding UTF8 | ForEach-Object {
+  $line = $_.TrimStart([char]0xFEFF).Trim()
+  if ($line -match '^(\w+)\s*=\s*(.*)$') { Set-Item "env:$($Matches[1])" ($Matches[2].Trim().Trim('"', "'", '<', '>').Trim()) }
+}
 
 # 게이트웨이: 이미 떠 있으면 다시 띄우지 않는다
 $gwUp = $false
@@ -38,7 +44,12 @@ if ($env:SUPABASE_URL -and $env:SUPABASE_SERVICE_ROLE_KEY) {
   try {
     Invoke-RestMethod "$($env:SUPABASE_URL)/rest/v1/llb_endpoint?on_conflict=id" -Method Post -Headers $h -ContentType 'application/json' -Body $body | Out-Null
     Write-Host 'Supabase 에 새 주소를 기록했습니다. Vercel 설정은 건드릴 필요가 없습니다.'
-  } catch { Write-Host "Supabase 기록 실패: $($_.Exception.Message)  (Vercel 의 CLICKHOUSE_URL 을 위 주소로 직접 바꾸세요)" }
+  } catch {
+    $detail = ''
+    try { $detail = (New-Object IO.StreamReader($_.Exception.Response.GetResponseStream())).ReadToEnd() } catch {}
+    Write-Host "Supabase 기록 실패: $($_.Exception.Message) $detail"
+    Write-Host '  (임시: Vercel 의 CLICKHOUSE_URL 을 위 터널 주소로 직접 바꿔도 됩니다)'
+  }
 } else {
   Write-Host 'llb-access.env 에 SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 가 없어 주소를 기록하지 못했습니다.'
 }
