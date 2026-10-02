@@ -282,20 +282,6 @@ export function LlbSearchPanel() {
             </div>
           );
         })}
-                    {p.meta.jif ? <span className={`px-1.5 py-0.5 rounded bg-[#e8b84b]/15 text-[#e8b84b] ${p.meta.suspect ? "opacity-40" : ""}`}>JIF {p.meta.jif.toFixed(1)}{p.meta.jifQ ? ` · ${p.meta.jifQ}` : ""}</span> : null}
-                    {!p.meta.jif && p.meta.jifEst ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/50">추정 IF {p.meta.jifEst.toFixed(1)}</span> : null}
-                    {p.meta.journalH ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/50">저널 H {p.meta.journalH}</span> : null}
-                    {p.meta.fwci ? <span className="px-1.5 py-0.5 rounded bg-emerald-400/10 text-emerald-300">fwci {p.meta.fwci.toFixed(2)}</span> : null}
-                    {p.meta.citePct ? <span className="px-1.5 py-0.5 rounded bg-emerald-400/10 text-emerald-300">상위 {Math.max(1, 100 - p.meta.citePct)}%</span> : null}
-                    {p.meta.isOa ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/60">OA</span> : null}
-                    {p.meta.suspect ? <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-300" title="DOI가 다른 논문과 겹치거나 저널 분야와 모순됩니다. 원문에서 서지정보를 확인하세요.">출처 확인 필요</span> : null}
-                  </div>
-                )}
-                {p.abstract && <p className="text-[13px] text-white/40 mt-2 line-clamp-3">{p.abstract}</p>}
-              </div>
-            </div>
-          </label>
-        ))}
         {!loading && results.length === 0 && (
           <p className="text-white/25 text-[14px] py-8 text-center">검색어를 입력하고 LLB 검색을 실행하세요.</p>
         )}
