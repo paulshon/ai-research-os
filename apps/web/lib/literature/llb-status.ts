@@ -39,25 +39,34 @@ async function chRows(sql: string, params: Record<string, string>, signal: Abort
 }
 
 let last: LlbStatus | null = null;
+let lastAt = 0;
+// 읽기 전용 외부 계정은 system.processes / system.merges 권한이 없다. 한 번 거부되면 다시 묻지 않는다(매번 오류가 쌓여 계정 오류 한도를 소모함).
+const denied = { procs: false, merges: false };
+const CACHE_MS = 15_000;
 
 export async function statusLlb(): Promise<LlbStatus> {
-  const signal = AbortSignal.timeout(12000);
+  if (last && !last.slow && Date.now() - lastAt < CACHE_MS) return last;
+  const signal = AbortSignal.timeout(25000);
   try {
-    // 표 개수만 필수. 진행 중 적재·병합 수는 부가 정보라, 읽기 전용 외부 계정에 권한이 없어도 연결 상태는 정상으로 본다.
-    const optional = (p: Promise<any[]>) => p.catch((e: any) => {
-      if (e?.name === "TimeoutError" || e?.name === "AbortError") throw e;
-      return [] as any[];
-    });
+    // 표 개수만 필수. 진행 중 적재·병합 수는 부가 정보라, 권한이 없어도 연결 상태는 정상으로 본다.
+    const optional = (key: "procs" | "merges", p: () => Promise<any[]>): Promise<any[]> => {
+      if (denied[key]) return Promise.resolve([]);
+      return p().catch((e: any) => {
+        if (e?.name === "TimeoutError" || e?.name === "AbortError") throw e;
+        if (/\b497\b|Not enough privileges/i.test(String(e?.message ?? e))) denied[key] = true;
+        return [] as any[];
+      });
+    };
     const [tables, procs, merges] = await Promise.all([
       chRows(
         `SELECT name, total_rows FROM system.tables WHERE (database = {db:String} AND name = 'lit_papers') OR (database = {src:String} AND name = 'papers_v2')`,
         { db: DB, src: SRC }, signal,
       ),
-      optional(chRows(
+      optional("procs", () => chRows(
         `SELECT count() AS n FROM system.processes WHERE query_kind = 'Insert' AND positionCaseInsensitive(query, 'lit_papers') > 0`,
         {}, signal,
       )),
-      optional(chRows(`SELECT count() AS n FROM system.merges WHERE database = {db:String} AND table = 'lit_papers'`, { db: DB }, signal)),
+      optional("merges", () => chRows(`SELECT count() AS n FROM system.merges WHERE database = {db:String} AND table = 'lit_papers'`, { db: DB }, signal)),
     ]);
     const rows = (name: string) => Number(tables.find((t) => t.name === name)?.total_rows ?? 0);
     const servedRows = rows("lit_papers");
@@ -70,6 +79,7 @@ export async function statusLlb(): Promise<LlbStatus> {
       activeMerges: Number(merges[0]?.n ?? 0),
       complete: !loading && percent !== null && percent >= 90,
     };
+    lastAt = Date.now();
     return last;
   } catch (e: any) {
     const timedOut = e?.name === "TimeoutError" || e?.name === "AbortError";
