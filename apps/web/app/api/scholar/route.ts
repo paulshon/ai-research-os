@@ -5,6 +5,9 @@ import {
 } from "@/lib/literature/scholar-ranking";
 import { searchLlb } from "@/lib/literature/llb-search";
 
+// LLB 검색은 1억 6천만 건 표를 읽어 흔한 단어는 20~60초가 걸릴 수 있다(함수 기본 제한 안에 끊기지 않게).
+export const maxDuration = 120;
+
 /**
  * /api/scholar — 실제 학술 메타데이터 검색 API (v9)
  *
