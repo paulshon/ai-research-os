@@ -31,7 +31,9 @@ Write-Host "터널 주소: $url"
 
 # 새 주소를 Supabase 에 기록 (앱이 30초 안에 새 주소를 읽는다)
 if ($env:SUPABASE_URL -and $env:SUPABASE_SERVICE_ROLE_KEY) {
-  $h = @{ apikey = $env:SUPABASE_SERVICE_ROLE_KEY; Authorization = "Bearer $($env:SUPABASE_SERVICE_ROLE_KEY)"; Prefer = 'resolution=merge-duplicates' }
+  $h = @{ apikey = $env:SUPABASE_SERVICE_ROLE_KEY; Prefer = 'resolution=merge-duplicates' }
+  # 예전 JWT 형식 키(eyJ...)는 Bearer 로도 보낸다. 새 sb_secret_ 키는 apikey 헤더만 허용된다.
+  if ($env:SUPABASE_SERVICE_ROLE_KEY -like 'eyJ*') { $h['Authorization'] = "Bearer $($env:SUPABASE_SERVICE_ROLE_KEY)" }
   $body = @{ id = 'current'; url = $url; updated_at = (Get-Date).ToUniversalTime().ToString('o') } | ConvertTo-Json
   try {
     Invoke-RestMethod "$($env:SUPABASE_URL)/rest/v1/llb_endpoint?on_conflict=id" -Method Post -Headers $h -ContentType 'application/json' -Body $body | Out-Null

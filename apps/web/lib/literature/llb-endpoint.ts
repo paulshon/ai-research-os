@@ -19,7 +19,8 @@ export async function syncLlbEndpoint(): Promise<void> {
   }
   try {
     const res = await fetch(`${base}/rest/v1/llb_endpoint?id=eq.current&select=url`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
+      // 새 sb_secret_ 키는 apikey 헤더만 허용, 예전 JWT 키(eyJ...)는 Bearer 도 함께 보낸다.
+      headers: key.startsWith("eyJ") ? { apikey: key, Authorization: `Bearer ${key}` } : { apikey: key },
       signal: AbortSignal.timeout(4000),
       cache: "no-store",
     });
