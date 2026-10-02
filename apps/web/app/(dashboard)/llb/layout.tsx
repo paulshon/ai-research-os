@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import CorpusModeToggle from "@/components/literature/corpus-mode-toggle";
+import LlbLoadStatus from "@/components/literature/llb-load-status";
 import { LLB_NAV, LLB_STACK } from "@/lib/literature/llb-nav";
 
 export default function LlbLayout({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,10 @@ export default function LlbLayout({ children }: { children: React.ReactNode }) {
           </div>
           <p className="text-[13px] text-[#e8b84b]/80 font-medium">LLB · 로컬문헌기반</p>
           <p className="text-[12px] text-white/25 mt-1">Scholar Stack (F·L·K)</p>
+        </div>
+
+        <div className="pt-3">
+          <LlbLoadStatus />
         </div>
 
         <nav className="p-2 space-y-0.5">
