@@ -12,16 +12,16 @@ $xml = @"
   <profiles>
     <llb_ro>
       <readonly>2</readonly>
-      <max_execution_time>60</max_execution_time>
-      <max_memory_usage>3000000000</max_memory_usage>
+      <max_execution_time>120</max_execution_time>
+      <max_memory_usage>6000000000</max_memory_usage>
       <max_result_rows>100000</max_result_rows>
-      <max_threads>4</max_threads>
+      <max_threads>8</max_threads>
       <constraints>
         <readonly><const/></readonly>
-        <max_execution_time><max>60</max></max_execution_time>
-        <max_memory_usage><max>3000000000</max></max_memory_usage>
+        <max_execution_time><max>120</max></max_execution_time>
+        <max_memory_usage><max>6000000000</max></max_memory_usage>
         <max_result_rows><max>100000</max></max_result_rows>
-        <max_threads><max>4</max></max_threads>
+        <max_threads><max>8</max></max_threads>
       </constraints>
     </llb_ro>
   </profiles>
@@ -40,7 +40,15 @@ $xml = @"
 </clickhouse>
 "@
 [IO.File]::WriteAllText('E:\CH_lit\users.d\llb_ro.xml', $xml)
-$env = "CH_USER=llb_ro`nCH_PASSWORD=$chPw`nGATEWAY_USER=llb`nGATEWAY_PASSWORD=$gwPw`n"
-[IO.File]::WriteAllText('E:\CH_lit\llb-access.env', $env)
+# 기존 파일의 다른 줄(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY 등)은 그대로 보존하고, 아래 네 값만 새로 쓴다
+$managed = 'CH_USER','CH_PASSWORD','GATEWAY_USER','GATEWAY_PASSWORD'
+$keep = @()
+if (Test-Path 'E:\CH_lit\llb-access.env') {
+  $keep = @(Get-Content 'E:\CH_lit\llb-access.env' -Encoding UTF8 | ForEach-Object { $_.TrimStart([char]0xFEFF) } |
+    Where-Object { $_.Trim() -ne '' } |
+    Where-Object { $l = $_; -not ($managed | Where-Object { $l -match ('^\s*' + $_ + '\s*=') }) })
+}
+$lines = @("CH_USER=llb_ro", "CH_PASSWORD=$chPw", "GATEWAY_USER=llb", "GATEWAY_PASSWORD=$gwPw") + $keep
+[IO.File]::WriteAllText('E:\CH_lit\llb-access.env', (($lines -join "`r`n") + "`r`n"), (New-Object Text.UTF8Encoding $false))
 Write-Host '완료. E:\CH_lit\llb-access.env 에 비밀번호가 저장되었습니다(이 파일은 어디에도 올리지 마세요).'
 Write-Host '다음: scripts\llb-start.ps1 로 게이트웨이와 터널을 시작합니다.'
