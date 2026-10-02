@@ -4,6 +4,7 @@ import {
   type ScholarMethodBoost,
 } from "@/lib/literature/scholar-ranking";
 import { searchLlb } from "@/lib/literature/llb-search";
+import { syncLlbEndpoint } from "@/lib/literature/llb-endpoint";
 
 // LLB 검색은 1억 6천만 건 표를 읽어 흔한 단어는 20~60초가 걸릴 수 있다(함수 기본 제한 안에 끊기지 않게).
 export const maxDuration = 120;
@@ -466,6 +467,7 @@ function llbRowToPaper(row: any, i: number, maxScore: number): PaperResult {
 }
 
 async function searchLocalLlb(sp: URLSearchParams, query: string, limit: number, region: string) {
+  await syncLlbEndpoint();
   const r = await searchLlb(llbOptsFromParams(sp, query, limit, region));
   const max = Math.max(0, ...r.results.map((x: any) => Number(x.score) || 0));
   return { total: r.total, lowerBound: !!r.totalIsLowerBound, stage: r.stage, ms: r.ms, results: r.results.map((x: any, i: number) => llbRowToPaper(x, i, max)) };

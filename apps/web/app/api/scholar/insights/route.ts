@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { facetsLlb, networkLlb } from "@/lib/literature/llb-search";
+import { syncLlbEndpoint } from "@/lib/literature/llb-endpoint";
 
 /**
  * /api/scholar/insights — LLB 코퍼스 전체(페이지 아님)에 대한 집계·네트워크.
@@ -9,6 +10,7 @@ import { facetsLlb, networkLlb } from "@/lib/literature/llb-search";
  */
 export async function GET(req: NextRequest) {
   const sp = new URL(req.url).searchParams;
+  await syncLlbEndpoint();
   try {
     const wids = (sp.get("wids") ?? "").split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0).slice(0, 300);
     if (wids.length) return NextResponse.json({ ok: true, ...(await networkLlb(wids)) });
