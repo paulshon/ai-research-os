@@ -43,16 +43,21 @@ let last: LlbStatus | null = null;
 export async function statusLlb(): Promise<LlbStatus> {
   const signal = AbortSignal.timeout(12000);
   try {
+    // 표 개수만 필수. 진행 중 적재·병합 수는 부가 정보라, 읽기 전용 외부 계정에 권한이 없어도 연결 상태는 정상으로 본다.
+    const optional = (p: Promise<any[]>) => p.catch((e: any) => {
+      if (e?.name === "TimeoutError" || e?.name === "AbortError") throw e;
+      return [] as any[];
+    });
     const [tables, procs, merges] = await Promise.all([
       chRows(
         `SELECT name, total_rows FROM system.tables WHERE (database = {db:String} AND name = 'lit_papers') OR (database = {src:String} AND name = 'papers_v2')`,
         { db: DB, src: SRC }, signal,
       ),
-      chRows(
+      optional(chRows(
         `SELECT count() AS n FROM system.processes WHERE query_kind = 'Insert' AND positionCaseInsensitive(query, 'lit_papers') > 0`,
         {}, signal,
-      ),
-      chRows(`SELECT count() AS n FROM system.merges WHERE database = {db:String} AND table = 'lit_papers'`, { db: DB }, signal),
+      )),
+      optional(chRows(`SELECT count() AS n FROM system.merges WHERE database = {db:String} AND table = 'lit_papers'`, { db: DB }, signal)),
     ]);
     const rows = (name: string) => Number(tables.find((t) => t.name === name)?.total_rows ?? 0);
     const servedRows = rows("lit_papers");

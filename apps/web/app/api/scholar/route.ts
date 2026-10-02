@@ -446,7 +446,7 @@ function llbRowToPaper(row: any, i: number, maxScore: number): PaperResult {
     authors: authors.slice(0, 8).join(", ") || String(row.first_author ?? ""),
     year: Number(row.year) > 0 ? Number(row.year) : null,
     journal: String(row.journal ?? ""),
-    abstract: String(row.abstract ?? "").slice(0, 900),
+    abstract: String(row.abstract ?? "").slice(0, 4000),
     doi,
     url: String(row.doi_url || row.pdf_url || row.id || ""),
     citations: Number(row.cited ?? 0),

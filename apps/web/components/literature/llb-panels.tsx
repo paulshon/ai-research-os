@@ -28,7 +28,7 @@ export interface LlbPaper {
 }
 
 export interface LlbMeta {
-  type?: string; lang?: string; area?: string; field?: string; topic?: string; fwci?: number; citePct?: number; isOa?: boolean; pdfUrl?: string;
+  type?: string; lang?: string; area?: string; field?: string; topic?: string; fwci?: number; citePct?: number; isOa?: boolean; pdfUrl?: string; pmid?: number | null;
   indexes?: string[]; jif?: number | null; jifQ?: string; jifEst?: number | null; journalH?: number | null; isKr?: boolean; suspect?: boolean;
 }
 
@@ -112,6 +112,8 @@ export function LlbSearchPanel() {
   const [fallback, setFallback] = useState(false);
   const [stat, setStat] = useState<{ matched?: number; ms?: number; lower?: boolean }>({});
   const [insights, setInsights] = useState<any>(null);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const toggleOpen = (id: string) => setExpanded((m) => ({ ...m, [id]: !m[id] }));
 
   const run = async () => {
     if (!q.trim()) return;
@@ -129,6 +131,7 @@ export function LlbSearchPanel() {
       setSources(data.sources);
       setNote(data.note ?? "");
       setSelected([]);
+      setExpanded({});
     } finally {
       setLoading(false);
     }
@@ -210,26 +213,75 @@ export function LlbSearchPanel() {
       )}
 
       <div className="space-y-2">
-        {results.map((p) => (
-          <label
-            key={p.id}
-            className={`block p-3 rounded-xl border cursor-pointer transition-all ${
-              selected.includes(p.id) ? "border-[#e8b84b]/40 bg-[#e8b84b]/08" : "border-white/[0.04] bg-[#13161e] hover:border-white/[0.08]"
-            }`}
-          >
-            <div className="flex gap-3">
-              <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggle(p.id)} className="mt-1" />
-              <div className="min-w-0">
-                <p className="text-[15px] text-white/85 font-medium line-clamp-2">{p.title}</p>
-                <p className="text-[13px] text-white/35 mt-1">
-                  {p.authors} · {p.year || "n.d."} · {p.journal || p.source}
-                  {typeof p.citations === "number" ? ` · 인용 ${p.citations}` : ""}
-                </p>
-                {p.meta && (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5 text-[11px]">
-                    {(p.meta.indexes ?? []).map((k) => (
-                      <span key={k} className={`px-1.5 py-0.5 rounded bg-[#6c8cff]/15 text-[#6c8cff] ${p.meta?.suspect ? "opacity-40" : ""}`}>{k.toUpperCase()}</span>
-                    ))}
+        {results.map((p) => {
+          const open = !!expanded[p.id];
+          const doiUrl = p.doi ? `https://doi.org/${p.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")}` : "";
+          const openalexUrl = /^https?:\/\//.test(p.id) ? p.id : "";
+          const pdfUrl = p.meta?.pdfUrl || "";
+          const links: { label: string; href: string }[] = [];
+          if (doiUrl) links.push({ label: "원문(DOI)", href: doiUrl });
+          if (p.url && p.url !== doiUrl && p.url !== openalexUrl && p.url !== pdfUrl) links.push({ label: "출처 페이지", href: p.url });
+          if (pdfUrl) links.push({ label: p.meta?.isOa ? "PDF(OA)" : "PDF", href: pdfUrl });
+          if (p.meta?.pmid) links.push({ label: "PubMed", href: `https://pubmed.ncbi.nlm.nih.gov/${p.meta.pmid}/` });
+          if (openalexUrl) links.push({ label: "OpenAlex", href: openalexUrl });
+          const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
+          return (
+            <div
+              key={p.id}
+              className={`block p-3 rounded-xl border transition-all ${
+                selected.includes(p.id) ? "border-[#e8b84b]/40 bg-[#e8b84b]/08" : "border-white/[0.04] bg-[#13161e] hover:border-white/[0.08]"
+              }`}
+            >
+              <div className="flex gap-3">
+                <input type="checkbox" checked={selected.includes(p.id)} onChange={() => toggle(p.id)} className="mt-1 cursor-pointer" aria-label="분석 대상으로 선택" />
+                <div className="min-w-0 flex-1">
+                  <div role="button" tabIndex={0} aria-expanded={open} className="cursor-pointer"
+                    onClick={() => toggleOpen(p.id)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleOpen(p.id); } }}>
+                    <p className={`text-[15px] text-white/85 font-medium ${open ? "" : "line-clamp-2"}`}>{p.title}</p>
+                    <p className="text-[13px] text-white/35 mt-1">
+                      {p.authors} · {p.year || "n.d."} · {p.journal || p.source}
+                      {typeof p.citations === "number" ? ` · 인용 ${p.citations}` : ""}
+                    </p>
+                    {p.meta && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5 text-[11px]">
+                        {(p.meta.indexes ?? []).map((k) => (
+                          <span key={k} className={`px-1.5 py-0.5 rounded bg-[#6c8cff]/15 text-[#6c8cff] ${p.meta?.suspect ? "opacity-40" : ""}`}>{k.toUpperCase()}</span>
+                        ))}
+                        {p.meta.jif ? <span className={`px-1.5 py-0.5 rounded bg-[#e8b84b]/15 text-[#e8b84b] ${p.meta.suspect ? "opacity-40" : ""}`}>JIF {p.meta.jif.toFixed(1)}{p.meta.jifQ ? ` · ${p.meta.jifQ}` : ""}</span> : null}
+                        {!p.meta.jif && p.meta.jifEst ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/50">추정 IF {p.meta.jifEst.toFixed(1)}</span> : null}
+                        {p.meta.journalH ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/50">저널 H {p.meta.journalH}</span> : null}
+                        {p.meta.fwci ? <span className="px-1.5 py-0.5 rounded bg-emerald-400/10 text-emerald-300">fwci {p.meta.fwci.toFixed(2)}</span> : null}
+                        {p.meta.citePct ? <span className="px-1.5 py-0.5 rounded bg-emerald-400/10 text-emerald-300">상위 {Math.max(1, 100 - p.meta.citePct)}%</span> : null}
+                        {p.meta.isOa ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/60">OA</span> : null}
+                        {p.meta.suspect ? <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-300" title="DOI가 다른 논문과 겹치거나 저널 분야와 모순됩니다. 원문에서 서지정보를 확인하세요.">출처 확인 필요</span> : null}
+                      </div>
+                    )}
+                    {p.abstract
+                      ? <p className={`text-[13px] text-white/40 mt-2 ${open ? "whitespace-pre-line" : "line-clamp-3"}`}>{p.abstract}</p>
+                      : open ? <p className="text-[13px] text-white/25 mt-2">이 논문은 초록이 수록되어 있지 않습니다. 아래 원문 링크에서 확인하세요.</p> : null}
+                  </div>
+                  {open && (
+                    <div className="mt-2 space-y-1 text-[12px] text-white/45">
+                      {p.keywords.length > 0 && <p>키워드: {p.keywords.join(" · ")}</p>}
+                      {p.meta?.topic && <p>주제: {p.meta.topic}{p.meta.field ? ` · ${p.meta.field}` : ""}</p>}
+                      {p.doi && <p>DOI: {p.doi}</p>}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2 mt-2 text-[12px]">
+                    {links.length > 0
+                      ? links.map((l) => (
+                        <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" onClick={stop}
+                          className="px-2 py-0.5 rounded-md border border-[#6c8cff]/30 text-[#6c8cff] hover:bg-[#6c8cff]/10">{l.label} ↗</a>
+                      ))
+                      : <span className="text-white/25">출처 링크 없음</span>}
+                    <button type="button" onClick={() => toggleOpen(p.id)} className="ml-auto text-white/35 hover:text-white/60">{open ? "접기 ▲" : "펼치기 ▼"}</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
                     {p.meta.jif ? <span className={`px-1.5 py-0.5 rounded bg-[#e8b84b]/15 text-[#e8b84b] ${p.meta.suspect ? "opacity-40" : ""}`}>JIF {p.meta.jif.toFixed(1)}{p.meta.jifQ ? ` · ${p.meta.jifQ}` : ""}</span> : null}
                     {!p.meta.jif && p.meta.jifEst ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/50">추정 IF {p.meta.jifEst.toFixed(1)}</span> : null}
                     {p.meta.journalH ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/50">저널 H {p.meta.journalH}</span> : null}
