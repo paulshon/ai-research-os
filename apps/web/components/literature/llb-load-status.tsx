@@ -55,6 +55,17 @@ export default function LlbLoadStatus() {
   }
 
   if (s.percent === null) {
+    // 진행률은 원본(papers_v2) 대비 비율이라, 원본이 없는 서버(E: 드라이브 DB)에서는 계산되지 않는다. 그건 지연이 아니라 정상 연결이다.
+    if (s.servedRows > 0) {
+      return (
+        <div className="mx-3 mb-2 px-3 py-2 rounded-lg border border-[#3ecfb2]/30 bg-[#3ecfb2]/[0.06]" role="status">
+          <p className="text-[12px] text-[#3ecfb2] font-medium">ClickHouse 연결됨</p>
+          <p className="text-[11px] text-white/35 mt-0.5 tabular-nums">
+            로컬 문헌 {fmt(s.servedRows)}건 검색 가능{s.slow ? " · 마지막 정상값" : ""}
+          </p>
+        </div>
+      );
+    }
     return (
       <div className="mx-3 mb-2 px-3 py-2 rounded-lg border border-[#e8b84b]/30 bg-[#e8b84b]/[0.06]" role="status">
         <p className="text-[12px] text-[#e8b84b] font-medium">ClickHouse 응답 지연</p>

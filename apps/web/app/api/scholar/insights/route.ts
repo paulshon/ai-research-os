@@ -33,8 +33,21 @@ export async function GET(req: NextRequest) {
       return [...m.entries()].map(([k, v]) => ({ [key]: k, ...v }));
     };
     const total = rows.reduce((p, r) => p + Number(r.n), 0);
+    // 연도별 상세(논문 수·인용 합·OA·색인별 편수): 추세 그래프용. 이미 가져온 집계 행에서 계산하므로 추가 질의가 없다.
+    const yearly = new Map<number, { year: number; n: number; cited: number; oa: number; sci: number; scopus: number; kci: number }>();
+    for (const r of rows) {
+      const y = Number(r.year); const n = Number(r.n);
+      const e = yearly.get(y) ?? { year: y, n: 0, cited: 0, oa: 0, sci: 0, scopus: 0, kci: 0 };
+      e.n += n; e.cited += Number(r.cited_sum);
+      if (Number(r.is_oa)) e.oa += n;
+      if (Number(r.sci)) e.sci += n;
+      if (Number(r.scopus)) e.scopus += n;
+      if (Number(r.kci)) e.kci += n;
+      yearly.set(y, e);
+    }
     return NextResponse.json({
       ok: true, total,
+      yearly: [...yearly.values()].sort((a, b) => a.year - b.year),
       years: (by("year", (r) => r.year) as any[]).sort((a, b) => a.year - b.year),
       areas: (by("area", (r) => r.area) as any[]).sort((a, b) => b.n - a.n),
       langs: (by("lang", (r) => r.lang) as any[]).sort((a, b) => b.n - a.n).slice(0, 8),

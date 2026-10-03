@@ -9,6 +9,7 @@ import LiteratureAnalyticsPanel, {
 import LiteratureEngineTools from "@/components/literature/literature-engine-tools";
 import { useAppStore } from "@/store/app-store";
 import { LLB_STACK } from "@/lib/literature/llb-nav";
+import LlbChartDashboard from "@/components/literature/llb-charts";
 
 export interface LlbPaper {
   id: string;
@@ -70,36 +71,6 @@ async function searchLlb(query: string, region: string, limit = 40, filters: Llb
   };
 }
 
-function LlbInsightBars({ data }: { data: any }) {
-  const years: { year: number; n: number }[] = (data.years ?? []).filter((y: any) => y.year >= 2000);
-  const maxY = Math.max(1, ...years.map((y) => y.n));
-  const areaName: Record<string, string> = { health: "보건", life: "생명", physical: "물리", social: "사회", humanities_arts: "인문·예술", other: "기타" };
-  const maxA = Math.max(1, ...(data.areas ?? []).map((a: any) => a.n));
-  return (
-    <div className="grid gap-3 md:grid-cols-2 p-3 rounded-xl bg-[#13161e] border border-white/[0.05]">
-      <div>
-        <p className="text-[12px] text-white/40 mb-1">연도별 논문 수 (일치 {Number(data.total).toLocaleString()}편 전체)</p>
-        <div className="flex items-end gap-[2px] h-20">
-          {years.map((y) => <div key={y.year} title={`${y.year}: ${y.n.toLocaleString()}`} className="flex-1 bg-[#e8b84b]/60 rounded-t-sm" style={{ height: `${Math.max(3, (y.n / maxY) * 100)}%` }} />)}
-        </div>
-        <div className="flex justify-between text-[10px] text-white/25 mt-0.5"><span>{years[0]?.year}</span><span>{years[years.length - 1]?.year}</span></div>
-      </div>
-      <div className="space-y-1">
-        <p className="text-[12px] text-white/40 mb-1">분야 · 색인 · OA</p>
-        {(data.areas ?? []).slice(0, 5).map((a: any) => (
-          <div key={a.area} className="flex items-center gap-2 text-[11px] text-white/50">
-            <span className="w-14 shrink-0">{areaName[a.area] ?? a.area}</span>
-            <div className="h-2 rounded bg-[#6c8cff]/60" style={{ width: `${(a.n / maxA) * 60}%` }} /><span>{a.n.toLocaleString()}</span>
-          </div>
-        ))}
-        <p className="text-[11px] text-white/40 pt-1">
-          {(data.indexes ?? []).map((i: any) => `${i.key} ${Number(i.n).toLocaleString()}`).join(" · ")} · OA {data.oa ? Math.round((data.oa.open / Math.max(1, data.oa.total)) * 100) : 0}%
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export function LlbSearchPanel() {
   const [q, setQ] = useState("");
   const [region, setRegion] = useState<"domestic" | "international">("international");
@@ -113,6 +84,7 @@ export function LlbSearchPanel() {
   const [stat, setStat] = useState<{ matched?: number; ms?: number; lower?: boolean }>({});
   const [insights, setInsights] = useState<any>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [usedQ, setUsedQ] = useState("");
   const toggleOpen = (id: string) => setExpanded((m) => ({ ...m, [id]: !m[id] }));
 
   const run = async () => {
@@ -132,6 +104,7 @@ export function LlbSearchPanel() {
       setNote(data.note ?? "");
       setSelected([]);
       setExpanded({});
+      setUsedQ(q.trim());
     } finally {
       setLoading(false);
     }
@@ -205,7 +178,7 @@ export function LlbSearchPanel() {
 
       {fallback && <p className="text-[13px] text-red-300 bg-red-500/10 border border-red-400/20 rounded-lg px-3 py-2">⚠ 로컬 LLB에 연결되지 않아 공개 API로 대체한 결과입니다 (저널 등급·JIF 없음).</p>}
       {!fallback && stat.matched != null && <p className="text-[12px] text-white/30">로컬 코퍼스 제목 일치 {stat.matched.toLocaleString()}{stat.lower ? "편 이상" : "편"} 중 상위 {results.length}편 · {stat.ms}ms</p>}
-      {insights && <LlbInsightBars data={insights} />}
+      {!fallback && (insights || results.length > 0) && <LlbChartDashboard insights={insights} papers={results} lower={stat.lower} query={usedQ} />}
 
       {note && <p className="text-[13px] text-[#e8b84b]/70 bg-[#e8b84b]/08 border border-[#e8b84b]/15 rounded-lg px-3 py-2">{note}</p>}
       {sources.length > 0 && (
