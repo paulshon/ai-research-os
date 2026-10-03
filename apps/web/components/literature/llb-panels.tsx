@@ -10,6 +10,7 @@ import LiteratureEngineTools from "@/components/literature/literature-engine-too
 import { useAppStore } from "@/store/app-store";
 import { LLB_STACK } from "@/lib/literature/llb-nav";
 import LlbChartDashboard from "@/components/literature/llb-charts";
+import DonutLoader from "@/components/literature/donut-loader";
 
 export interface LlbPaper {
   id: string;
@@ -85,6 +86,7 @@ export function LlbSearchPanel() {
   const [insights, setInsights] = useState<any>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [usedQ, setUsedQ] = useState("");
+  const [insLoading, setInsLoading] = useState(false);
   const toggleOpen = (id: string) => setExpanded((m) => ({ ...m, [id]: !m[id] }));
 
   const run = async () => {
@@ -97,8 +99,10 @@ export function LlbSearchPanel() {
       setStat({ matched: data.matched, ms: data.ms, lower: data.lower });
       setInsights(null);
       if (!data.fallback) {
+        setInsLoading(true);
         fetch(`/api/scholar/insights?q=${encodeURIComponent(q.trim())}&region=${region}${filterQuery(filters)}`)
-          .then((r) => r.json()).then((j) => setInsights(j.ok ? j : null)).catch(() => setInsights(null));
+          .then((r) => r.json()).then((j) => setInsights(j.ok ? j : null)).catch(() => setInsights(null))
+          .finally(() => setInsLoading(false));
       }
       setSources(data.sources);
       setNote(data.note ?? "");
@@ -176,6 +180,17 @@ export function LlbSearchPanel() {
         </select>
       </div>
 
+      {(loading || insLoading) && (
+        <DonutLoader
+          title={loading ? "로컬 문헌 검색 중" : "검색 결과 집계 중"}
+          hint="흔한 단어는 20~30초 걸릴 수 있습니다. 검색어를 두 단어 이상으로 좁히면 빨라집니다."
+          steps={[
+            { label: "제목·초록 일치 검색", state: loading ? "active" : "done" },
+            { label: "연도·분야·색인 통계 집계", state: loading ? "pending" : "active" },
+            { label: "저자·소속·주제 조회", state: "pending" },
+          ]}
+        />
+      )}
       {fallback && <p className="text-[13px] text-red-300 bg-red-500/10 border border-red-400/20 rounded-lg px-3 py-2">⚠ 로컬 LLB에 연결되지 않아 공개 API로 대체한 결과입니다 (저널 등급·JIF 없음).</p>}
       {!fallback && stat.matched != null && <p className="text-[12px] text-white/30">로컬 코퍼스 제목 일치 {stat.matched.toLocaleString()}{stat.lower ? "편 이상" : "편"} 중 상위 {results.length}편 · {stat.ms}ms</p>}
       {!fallback && (insights || results.length > 0) && <LlbChartDashboard insights={insights} papers={results} lower={stat.lower} query={usedQ} />}

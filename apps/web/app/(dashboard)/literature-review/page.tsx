@@ -13,6 +13,7 @@ import LiteratureAnalyticsPanel, {
 import LiteratureEngineTools from "@/components/literature/literature-engine-tools";
 import CorpusModeToggle from "@/components/literature/corpus-mode-toggle";
 import LlbChartDashboard from "@/components/literature/llb-charts";
+import DonutLoader from "@/components/literature/donut-loader";
 import { useAppStore } from "@/store/app-store";
 import {
   buildNetworkSummaryFromMeta,
@@ -857,10 +858,15 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
 
               {/* 검색 상태 */}
               {searchLoading ? (
-                <div className="text-center py-16">
-                  <div className="inline-block w-8 h-8 border-2 border-[#6c8cff]/30 border-t-[#6c8cff] rounded-full animate-spin mb-4" />
-                  <p className="text-white/30 text-[16px]">{t("litReview.searching")}</p>
-                  <p className="text-white/15 text-[14px] mt-1">{t("litReview.searchingReal")}</p>
+                <div className="py-8 max-w-xl mx-auto">
+                  <DonutLoader
+                    title={t("litReview.searching")}
+                    hint={t("litReview.searchingReal")}
+                    steps={[
+                      { label: "학술 DB 조회 · JCR 저널 지표 매칭", state: "active" },
+                      { label: "저자·소속·주제 조회 (결과 표시 직후)", state: "pending" },
+                    ]}
+                  />
                 </div>
               ) : (() => {
                 const allRegionPapers = searchResults
@@ -913,7 +919,7 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
                             query={searchQuery}
                             knownIndexes={["scie", "ssci", "ahci", "esci"]}
                             indexNote="JCR 2025 기준 · L1은 Scopus·KCI를 구분하지 않음"
-                            papers={regionPapers.map((p) => ({ id: p.id, journal: p.journal, citations: p.citations, keywords: p.keywords ?? [], title: p.title, abstract: p.abstract, meta: p.meta }))}
+                            papers={regionPapers.map((p) => ({ id: p.id, journal: p.journal, citations: p.citations, keywords: p.keywords ?? [], title: p.title, abstract: p.abstract, doi: p.doi, authors: p.authors, meta: p.meta }))}
                           />
                         </details>
                       )}

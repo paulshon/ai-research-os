@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import DonutLoader from "./donut-loader";
 
 /**
  * LLB 검색 결과 시각화 대시보드.
@@ -241,8 +242,8 @@ const CITE_BINS: { label: string; lo: number; hi: number }[] = [
 
 export interface ChartPaper {
   id: string; journal: string; citations: number; keywords: string[];
-  title?: string; abstract?: string;
-  meta?: { jif?: number | null; jifQ?: string; fwci?: number; indexes?: string[]; jcr?: boolean } | null;
+  title?: string; abstract?: string; doi?: string; authors?: string;
+  meta?: { jif?: number | null; jifQ?: string; fwci?: number; indexes?: string[]; jcr?: boolean; topic?: string; field?: string } | null;
 }
 
 // ── 단어 빈도 ──────────────────────────────────────────────
@@ -446,6 +447,225 @@ function JournalIndexCards({ papers, known, note }: { papers: ChartPaper[]; know
   );
 }
 
+
+// ── 저자 · 소속(대학·단체) · 주제 × 색인 ─────────────────────────────
+interface AffInst { n: string; id: string; c: string; t: string }
+interface AffAuthor { n: string; i: string; inst: AffInst[] }
+export interface AffWork { id: string; doi: string; authors: AffAuthor[]; topic: { n: string; f: string } | null }
+
+interface HeatRow { label: string; per: number[]; n: number }
+export interface AffModel {
+  cols: { key: string; label: string; color: string }[];
+  authors: HeatRow[]; insts: HeatRow[]; topics: HeatRow[];
+  countries: { label: string; value: number }[]; types: { label: string; value: number; color: string }[];
+  authorTable: { name: string; insts: string; n: number; idx: string[] }[];
+  covered: number; total: number;
+}
+
+const INST_TYPE: Record<string, { label: string; color: string }> = {
+  education: { label: "대학·교육기관", color: S1 }, company: { label: "기업", color: S2 }, healthcare: { label: "의료기관", color: S3 },
+  government: { label: "정부기관", color: S4 }, facility: { label: "연구시설", color: S5 }, nonprofit: { label: "비영리단체", color: S7 },
+};
+
+const OA_ID = /^(?:https?:\/\/openalex\.org\/|openalex_\d+_)(W\d{3,})$/;
+const widOf = (id: string) => OA_ID.exec(id ?? "")?.[1] ?? "";
+const doiOf = (d?: string) => String(d ?? "").trim().toLowerCase().replace(/^https?:\/\/(dx\.)?doi\.org\//, "");
+
+function countryName(code: string): string {
+  try { return new Intl.DisplayNames(["ko"], { type: "region" }).of(code.toUpperCase()) ?? code; } catch { return code; }
+}
+
+export function buildAff(papers: ChartPaper[], works: AffWork[], known: string[]): AffModel {
+  const cols = [...IDX.filter((x) => known.includes(x.key)).map((x) => ({ key: x.key, label: x.label, color: x.color })), { key: NONE_KEY, label: "미확인", color: GRAY }];
+  const colIdx = new Map(cols.map((c, i) => [c.key, i]));
+  const byW = new Map<string, AffWork>(), byDoi = new Map<string, AffWork>();
+  for (const w of works) { if (w.id) byW.set(w.id, w); if (w.doi) byDoi.set(w.doi, w); }
+
+  const mk = () => new Map<string, { label: string; per: number[]; n: number }>();
+  const aM = mk(), iM = mk(), tM = mk();
+  const bump = (m: Map<string, { label: string; per: number[]; n: number }>, key: string, label: string, cs: number[]) => {
+    const e = m.get(key) ?? { label, per: cols.map(() => 0), n: 0 };
+    e.n += 1; cs.forEach((c) => (e.per[c] += 1)); m.set(key, e);
+  };
+  const countryM = new Map<string, number>(), typeM = new Map<string, number>();
+  const authorInst = new Map<string, Map<string, number>>(), authorIdx = new Map<string, Set<string>>();
+  let covered = 0;
+
+  for (const p of papers) {
+    const ks = known.filter((k) => p.meta?.indexes?.includes(k));
+    const cs = (ks.length ? ks : [NONE_KEY]).map((k) => colIdx.get(k) as number);
+    const w = byW.get(widOf(p.id)) ?? byDoi.get(doiOf(p.doi));
+    const authors: AffAuthor[] = w?.authors?.length
+      ? w.authors
+      : String(p.authors ?? "").split(/,\s*/).map((n) => n.trim()).filter((n) => n && !/^unknown$/i.test(n)).map((n) => ({ n, i: "", inst: [] }));
+
+    const seenA = new Set<string>(), seenI = new Set<string>();
+    for (const a of authors) {
+      const ak = a.i || a.n.toLowerCase();
+      if (!seenA.has(ak)) {
+        seenA.add(ak); bump(aM, ak, a.n, cs);
+        const idxSet = authorIdx.get(ak) ?? new Set<string>(); cs.forEach((c) => idxSet.add(cols[c].key)); authorIdx.set(ak, idxSet);
+      }
+      for (const ins of a.inst) {
+        const ik = ins.id || ins.n.toLowerCase();
+        const im = authorInst.get(ak) ?? new Map<string, number>(); im.set(ins.n, (im.get(ins.n) ?? 0) + 1); authorInst.set(ak, im);
+        if (!seenI.has(ik)) {
+          seenI.add(ik); bump(iM, ik, ins.n, cs);
+          if (ins.c) countryM.set(ins.c, (countryM.get(ins.c) ?? 0) + 1);
+          const tk = INST_TYPE[ins.t] ? ins.t : "other";
+          typeM.set(tk, (typeM.get(tk) ?? 0) + 1);
+        }
+      }
+    }
+    if (seenI.size) covered += 1;
+    const topic = (w?.topic?.n || p.meta?.topic || "").trim();
+    if (topic) bump(tM, topic.toLowerCase(), topic, cs);
+  }
+
+  const rows = (m: Map<string, HeatRow>, k: number): HeatRow[] =>
+    [...m.values()].sort((a, b) => b.n - a.n || a.label.localeCompare(b.label)).slice(0, k);
+  const authorsTop = [...aM.entries()].sort((a, b) => b[1].n - a[1].n || a[1].label.localeCompare(b[1].label));
+  return {
+    cols, authors: rows(aM, 10), insts: rows(iM, 10), topics: rows(tM, 10),
+    countries: [...countryM.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c, v]) => ({ label: countryName(c), value: v })),
+    types: [...typeM.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: INST_TYPE[k]?.label ?? "기타", value: v, color: INST_TYPE[k]?.color ?? GRAY })),
+    authorTable: authorsTop.slice(0, 12).map(([k, e]) => ({
+      name: e.label, n: e.n,
+      insts: [...(authorInst.get(k)?.entries() ?? [])].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([n]) => n).join(" · "),
+      idx: cols.filter((c) => authorIdx.get(k)?.has(c.key)).map((c) => c.label),
+    })),
+    covered, total: papers.length,
+  };
+}
+
+/** 행(저자·기관·주제) × 색인 열 히트맵. 한 논문이 여러 색인에 속하면 각 열에 모두 센다. */
+function Heat({ cols, rows, what }: { cols: { key: string; label: string; color: string }[]; rows: HeatRow[]; what: string }) {
+  const max = Math.max(1, ...rows.flatMap((r) => r.per));
+  if (!rows.length) return <p className="text-[12px] text-white/30 py-6 text-center">표시할 데이터가 없습니다.</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[11px]" style={{ borderCollapse: "separate", borderSpacing: 2 }}>
+        <thead>
+          <tr>
+            <th />
+            {cols.map((c) => (
+              <th key={c.key} className="font-normal text-white/45 text-center px-0.5 whitespace-nowrap text-[10px]">
+                <span className="inline-block w-1.5 h-1.5 rounded-sm mr-0.5 align-middle" style={{ background: c.color }} />{c.label}
+              </th>
+            ))}
+            <th className="font-normal text-white/30 text-right pl-1 text-[10px]">논문</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label}>
+              <td className="max-w-[120px] truncate text-white/60 pr-1" title={r.label}>{r.label}</td>
+              {r.per.map((v, i) => (
+                <td key={i} title={`${r.label} · ${cols[i].label}: ${v}편 (${what})`} className="text-center rounded-[3px] tabular-nums"
+                  style={{ minWidth: 26, height: 22, background: v ? `rgba(57,135,229,${(0.14 + 0.72 * (v / max)).toFixed(2)})` : "rgba(255,255,255,0.03)", color: v ? (v / max > 0.5 ? "#fff" : INK2) : INK3 }}>
+                  {v || "·"}
+                </td>
+              ))}
+              <td className="text-right text-white/55 pl-1 tabular-nums">{r.n}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AffiliationCards({ papers, known }: { papers: ChartPaper[]; known: string[] }) {
+  const items = useMemo(() => papers.slice(0, 50), [papers]);
+  const reqKey = items.map((p) => p.id).join("|");
+  const [st, setSt] = useState<{ key: string; status: "loading" | "ok" | "error"; works: AffWork[] }>({ key: "", status: "loading", works: [] });
+
+  useEffect(() => {
+    const ids = items.map((p) => widOf(p.id)).filter(Boolean);
+    const dois = items.filter((p) => !widOf(p.id)).map((p) => doiOf(p.doi)).filter(Boolean);
+    if (!ids.length && !dois.length) { setSt({ key: reqKey, status: "ok", works: [] }); return; }
+    const ac = new AbortController();
+    setSt({ key: reqKey, status: "loading", works: [] });
+    fetch("/api/scholar/affiliations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids, dois }), signal: ac.signal })
+      .then((r) => r.json())
+      .then((j) => { if (!ac.signal.aborted) setSt({ key: reqKey, status: j?.ok ? "ok" : "error", works: j?.ok ? j.works : [] }); })
+      .catch(() => { if (!ac.signal.aborted) setSt({ key: reqKey, status: "error", works: [] }); });
+    return () => ac.abort();
+  }, [reqKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const knownKey = known.join(",");
+  const model = useMemo(() => buildAff(items, st.works, knownKey.split(",")), [items, st.works, knownKey]);
+  if (!items.length) return null;
+
+  if (st.status === "loading" || st.key !== reqKey) {
+    return (
+      <DonutLoader compact title="저자·소속 정보 불러오는 중" hint="OpenAlex에서 저자의 소속(대학·단체)과 주제를 가져옵니다."
+        steps={[{ label: "논문 검색", state: "done" }, { label: "저자·소속·주제 조회", state: "active" }]} />
+    );
+  }
+
+  const failed = st.status === "error";
+  const note = failed ? "소속 조회 실패 — 저자 이름과 주제만 표시" : `상위 ${items.length}편 기준 · 소속 확인 ${model.covered}/${model.total}편`;
+  return <AffiliationView model={model} failed={failed} note={note} />;
+}
+
+/** 저자·소속·주제 × 색인 카드 묶음(조회가 끝난 뒤의 화면). 순수 컴포넌트라 데이터만 주면 그려진다. */
+export function AffiliationView({ model, failed, note }: { model: AffModel; failed: boolean; note: string }) {
+  return (
+    <>
+      {model.authorTable.length > 0 && (
+        <Card title="저자 · 소속" sub={`많이 등장한 저자와 소속 기관 · ${note}`}
+          table={{ head: ["저자", "소속", "논문", "색인"], rows: model.authorTable.map((a) => [a.name, a.insts || "–", a.n, a.idx.join(" · ")]) }}>
+          <ul className="space-y-1.5">
+            {model.authorTable.slice(0, 8).map((a) => (
+              <li key={a.name} className="text-[12px]">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-white/80 truncate" title={a.name}>{a.name}</span>
+                  <span className="ml-auto shrink-0 text-white/45 tabular-nums">{a.n}편</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-white/35">
+                  <span className="truncate" title={a.insts}>{a.insts || (failed ? "소속 정보 없음" : "소속 미확인")}</span>
+                  <span className="ml-auto shrink-0 flex gap-0.5">
+                    {model.cols.filter((c) => a.idx.includes(c.label)).map((c) => (
+                      <span key={c.key} title={c.label} className="px-1 rounded-sm text-[9px] text-white/80" style={{ background: c.color }}>{c.label === "미확인" ? "–" : c.label}</span>
+                    ))}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+      {model.authors.length > 0 && (
+        <Card title="저자 × 색인" sub="상위 저자 10명의 논문이 어느 색인 저널에 실렸는지" table={{ head: ["저자", ...model.cols.map((c) => c.label), "논문"], rows: model.authors.map((r) => [r.label, ...r.per, r.n]) }}>
+          <Heat cols={model.cols} rows={model.authors} what="저자" />
+        </Card>
+      )}
+      {model.insts.length > 0 && (
+        <Card title="기관(학교·단체) × 색인" sub={`상위 기관 10곳의 논문이 어느 색인 저널에 실렸는지 · ${note}`} table={{ head: ["기관", ...model.cols.map((c) => c.label), "논문"], rows: model.insts.map((r) => [r.label, ...r.per, r.n]) }}>
+          <Heat cols={model.cols} rows={model.insts} what="기관" />
+        </Card>
+      )}
+      {model.topics.length > 0 && (
+        <Card title="주제 × 색인" sub="자주 나온 주제 10개가 어느 색인 저널에 실렸는지" table={{ head: ["주제", ...model.cols.map((c) => c.label), "논문"], rows: model.topics.map((r) => [r.label, ...r.per, r.n]) }}>
+          <Heat cols={model.cols} rows={model.topics} what="주제" />
+        </Card>
+      )}
+      {model.types.length > 0 && (
+        <Card title="기관 유형" sub="논문에 참여한 기관의 종류(기관 수 기준)" table={{ head: ["유형", "기관 수"], rows: model.types.map((x) => [x.label, x.value]) }}>
+          <StackShare parts={model.types} />
+        </Card>
+      )}
+      {model.countries.length > 0 && (
+        <Card title="기관 소재 국가" sub="참여 기관이 있는 국가(기관 수 기준)" table={{ head: ["국가", "기관 수"], rows: model.countries.map((x) => [x.label, x.value]) }}>
+          <HBars color={S3} valueFmt={(v) => `${v}곳`} rows={model.countries} />
+        </Card>
+      )}
+    </>
+  );
+}
+
+
 export default function LlbChartDashboard({ insights, papers, lower, query = "", knownIndexes = ["scie", "ssci", "ahci", "esci", "scopus", "kci"], indexNote }: { insights: any | null; papers: ChartPaper[]; lower?: boolean; query?: string; knownIndexes?: string[]; indexNote?: string }) {
   const text = useMemo(() => wordStats(papers, query), [papers, query]);
   const yearly: any[] = useMemo(() => {
@@ -547,6 +767,7 @@ export default function LlbChartDashboard({ insights, papers, lower, query = "",
           </Card>
         )}
         {papers.length > 0 && <JournalIndexCards papers={papers} known={knownIndexes} note={indexNote} />}
+        {papers.length > 0 && <AffiliationCards papers={papers} known={knownIndexes} />}
         {papers.length > 0 && (
           <Card title="상위 저널" sub={`지금 보이는 ${papers.length}편 중 편수 상위`} table={{ head: ["저널", "편수"], rows: page.journals.map(([j, n]) => [j, n]) }}>
             <HBars color={S5} valueFmt={(v) => `${v}편`} empty="저널 정보가 없습니다." rows={page.journals.map(([j, n]) => ({ label: j, value: n }))} />
