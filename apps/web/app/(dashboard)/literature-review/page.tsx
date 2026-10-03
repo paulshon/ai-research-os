@@ -12,6 +12,7 @@ import LiteratureAnalyticsPanel, {
 } from "@/components/literature/literature-analytics-panel";
 import LiteratureEngineTools from "@/components/literature/literature-engine-tools";
 import CorpusModeToggle from "@/components/literature/corpus-mode-toggle";
+import LlbChartDashboard from "@/components/literature/llb-charts";
 import { useAppStore } from "@/store/app-store";
 import {
   buildNetworkSummaryFromMeta,
@@ -123,6 +124,8 @@ interface SearchResult {
   source: string;
   similarity?: number;
   region: "domestic" | "international";
+  /** 서버가 붙인 JCR 값: jif, jifQ, indexes(scie/ssci/ahci/esci), jcr, jcrCategory */
+  meta?: Record<string, any>;
 }
 
 /* ─────────────────────────────────────────────
@@ -153,6 +156,10 @@ export default function LiteratureReviewPage() {
   const [activeTab, setActiveTab] = useState("search");
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  // L1 결과의 JCR(2025 JIF) 필터 — 색인(SCIE/SSCI/A&HCI/ESCI)과 최소 JIF
+  const [l1Idx, setL1Idx] = useState<string[]>([]);
+  const [l1MinJif, setL1MinJif] = useState("");
+  const [l1Jcr, setL1Jcr] = useState<{ matched: number; total: number; version: string } | null>(null);
   const [selectedDBs, setSelectedDBs] = useState<number[]>([25, 26, 49]); // Scopus, WoS, DOAJ default
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
   const [researchGap, setResearchGap] = useState("");
@@ -372,6 +379,7 @@ export default function LiteratureReviewPage() {
         `/api/scholar?q=${encodeURIComponent(searchQuery)}&region=${region}&limit=${reqLimit}&method=${selectedThesisType}${kwQuery}`,
       );
       const data = await res.json();
+      setL1Jcr(data.jcr ? { matched: Number(data.jcr.matched) || 0, total: Number(data.jcr.total) || 0, version: String(data.jcr.version ?? "") } : null);
       const results: SearchResult[] = (data.results ?? []).map((r: any) => ({
         ...r,
         region: region,
@@ -855,22 +863,60 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
                   <p className="text-white/15 text-[14px] mt-1">{t("litReview.searchingReal")}</p>
                 </div>
               ) : (() => {
-                const regionPapers = searchResults
+                const allRegionPapers = searchResults
                   .filter(r => r.region === searchRegion)
                   .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0));
+                const minJifNum = parseFloat(l1MinJif);
+                const l1Filtered = l1Idx.length > 0 || Number.isFinite(minJifNum);
+                const regionPapers = allRegionPapers.filter((r) => {
+                  if (l1Idx.length > 0 && !(r.meta?.indexes ?? []).some((k: string) => l1Idx.includes(k))) return false;
+                  if (Number.isFinite(minJifNum) && !(Number(r.meta?.jif) >= minJifNum)) return false;
+                  return true;
+                });
+                const jifTxt = (j: number) => (j === 0.05 ? "<0.1" : j >= 100 ? j.toFixed(0) : j.toFixed(1));
+                const idxLabel = (k: string) => (k === "ahci" ? "A&HCI" : k.toUpperCase());
 
-                if (regionPapers.length > 0) {
+                if (allRegionPapers.length > 0) {
                   const regionColor = searchRegion === "domestic" ? "#6c8cff" : "#3ecfb2";
                   return (
                     <>
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-[18px] font-semibold">
-                          {searchRegion === "domestic" ? t("litReview.domesticResults") : t("litReview.internationalResults")} ({regionPapers.length})
+                          {searchRegion === "domestic" ? t("litReview.domesticResults") : t("litReview.internationalResults")} ({regionPapers.length}{l1Filtered ? ` / ${allRegionPapers.length}` : ""})
                         </h3>
                         <span className="text-[14px] text-white/25">
                           {t("litReview.selectedPapers")}: {selectedResults.length}
                         </span>
                       </div>
+                      <div className="flex flex-wrap items-center gap-2 mb-3 text-[13px] text-white/50">
+                        <span className="text-white/30">JCR {l1Jcr?.version ? "2025" : ""}</span>
+                        {[["scie", "SCIE"], ["ssci", "SSCI"], ["ahci", "A&HCI"], ["esci", "ESCI"]].map(([k, label]) => (
+                          <button key={k} type="button"
+                            onClick={() => setL1Idx((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]))}
+                            className={`px-2.5 py-1 rounded-md border ${l1Idx.includes(k) ? "border-[#e8b84b]/50 text-[#e8b84b] bg-[#e8b84b]/10" : "border-white/[0.08]"}`}>{label}</button>
+                        ))}
+                        <input value={l1MinJif} onChange={(e) => setL1MinJif(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="JIF ≥" className="w-20 px-2 py-1 rounded-md bg-[#13161e] border border-white/[0.08]" />
+                        {l1Jcr && (
+                          <span className="text-[12px] text-white/30">
+                            {l1Jcr.matched}/{l1Jcr.total}편의 저널이 JCR에서 확인됨 (논문 DB·프리프린트는 JCR 대상이 아님)
+                          </span>
+                        )}
+                      </div>
+                      {regionPapers.length === 0 && (
+                        <p className="text-[14px] text-white/30 py-6 text-center">필터 조건에 맞는 논문이 없습니다. 색인이나 JIF 조건을 완화해 보세요.</p>
+                      )}
+                      {regionPapers.length > 0 && (
+                        <details open className="mb-4 group">
+                          <summary className="cursor-pointer text-[14px] text-white/50 mb-2 select-none">데이터 시각화 ({regionPapers.length}편 기준)</summary>
+                          <LlbChartDashboard
+                            insights={null}
+                            query={searchQuery}
+                            knownIndexes={["scie", "ssci", "ahci", "esci"]}
+                            indexNote="JCR 2025 기준 · L1은 Scopus·KCI를 구분하지 않음"
+                            papers={regionPapers.map((p) => ({ id: p.id, journal: p.journal, citations: p.citations, keywords: p.keywords ?? [], title: p.title, abstract: p.abstract, meta: p.meta }))}
+                          />
+                        </details>
+                      )}
                       <div className="space-y-3">
                         {regionPapers.map((paper, idx) => {
                           const isSelected = selectedResults.includes(paper.id);
@@ -899,6 +945,20 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
                                   <p className="text-[14px] text-white/40 mb-1.5">
                                     {paper.authors} · {paper.year || "N/A"} · <span style={{ color: `${regionColor}b3` }}>{paper.journal}</span>
                                   </p>
+                                  {paper.meta?.jcr && (
+                                    <div className="flex flex-wrap gap-1.5 mb-1.5 text-[11px]" title={`Clarivate JCR 2025 (${paper.meta.jcrName ?? paper.journal})`}>
+                                      {(paper.meta.indexes ?? []).map((k: string) => (
+                                        <span key={k} className="px-1.5 py-0.5 rounded bg-[#6c8cff]/15 text-[#6c8cff]">{idxLabel(k)}</span>
+                                      ))}
+                                      {paper.meta.jif ? (
+                                        <span className="px-1.5 py-0.5 rounded bg-[#e8b84b]/15 text-[#e8b84b]">JIF {jifTxt(Number(paper.meta.jif))}{paper.meta.jifQ ? ` · ${paper.meta.jifQ}` : ""}</span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/45">JIF 없음</span>
+                                      )}
+                                      {paper.meta.jif5 ? <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-white/50">5년 JIF {jifTxt(Number(paper.meta.jif5))}</span> : null}
+                                      {paper.meta.jcrCategory ? <span className="px-1.5 py-0.5 rounded bg-white/[0.04] text-white/35">{paper.meta.jcrCategory}</span> : null}
+                                    </div>
+                                  )}
                                   {paper.abstract && (
                                     <p className="text-[14px] text-white/30 leading-relaxed mb-2 line-clamp-3">
                                       {paper.abstract}

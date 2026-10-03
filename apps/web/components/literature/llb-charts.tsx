@@ -13,6 +13,7 @@ import { useMemo, useState, type MouseEvent, type ReactNode } from "react";
 const S1 = "#3987e5"; // blue
 const S2 = "#d95926"; // orange
 const S3 = "#199e70"; // aqua
+const S4 = "#c98500"; // yellow
 const S5 = "#d55181"; // magenta
 const S7 = "#9085e9"; // violet
 const GRAY = "rgba(255,255,255,0.28)";
@@ -188,18 +189,18 @@ function Line({ pts, color = S1, yMax, yFmt = compact, aria }: { pts: Pt[]; colo
 }
 
 /** 가로 막대(크기 비교). 값은 막대 끝에, 라벨은 텍스트색 */
-function HBars({ rows, color = S1, valueFmt = fmt, empty = "표시할 데이터가 없습니다." }: { rows: { label: string; value: number; tip?: string; color?: string }[]; color?: string; valueFmt?: (n: number) => string; empty?: string }) {
+function HBars({ rows, color = S1, valueFmt = fmt, empty = "표시할 데이터가 없습니다.", labelW = "w-24", valueW = "w-12" }: { rows: { label: string; value: number; tip?: string; color?: string; valueText?: string }[]; color?: string; valueFmt?: (n: number) => string; empty?: string; labelW?: string; valueW?: string }) {
   const max = Math.max(1, ...rows.map((r) => r.value));
   if (!rows.length) return <p className="text-[12px] text-white/30 py-6 text-center">{empty}</p>;
   return (
     <ul className="space-y-1.5">
       {rows.map((r) => (
         <li key={r.label} className="flex items-center gap-2 text-[11px] group" title={r.tip ?? `${r.label}: ${valueFmt(r.value)}`}>
-          <span className="w-24 shrink-0 truncate text-white/55" title={r.label}>{r.label}</span>
+          <span className={`${labelW} shrink-0 truncate text-white/55`} title={r.label}>{r.label}</span>
           <span className="flex-1 min-w-0 h-2 flex items-center">
             <span className="h-2 rounded-r-[4px] group-hover:opacity-80" style={{ width: `${Math.max(1.5, (r.value / max) * 100)}%`, background: r.color ?? color, maxWidth: "calc(100% - 44px)" }} />
           </span>
-          <span className="w-12 shrink-0 text-right text-white/60 tabular-nums">{valueFmt(r.value)}</span>
+          <span className={`${valueW} shrink-0 text-right text-white/60 tabular-nums`}>{r.valueText ?? valueFmt(r.value)}</span>
         </li>
       ))}
     </ul>
@@ -241,7 +242,7 @@ const CITE_BINS: { label: string; lo: number; hi: number }[] = [
 export interface ChartPaper {
   id: string; journal: string; citations: number; keywords: string[];
   title?: string; abstract?: string;
-  meta?: { jif?: number | null; jifQ?: string; fwci?: number } | null;
+  meta?: { jif?: number | null; jifQ?: string; fwci?: number; indexes?: string[]; jcr?: boolean } | null;
 }
 
 // ── 단어 빈도 ──────────────────────────────────────────────
@@ -338,7 +339,114 @@ function WordCloud({ words }: { words: { w: string; n: number }[] }) {
   );
 }
 
-export default function LlbChartDashboard({ insights, papers, lower, query = "" }: { insights: any | null; papers: ChartPaper[]; lower?: boolean; query?: string }) {
+
+// ── 저널 색인 구분(SCIE · SSCI · A&HCI · ESCI · Scopus · KCI) ─────────────
+const IDX: { key: string; label: string; color: string }[] = [
+  { key: "scie", label: "SCIE", color: S1 }, { key: "ssci", label: "SSCI", color: S2 }, { key: "ahci", label: "A&HCI", color: S3 },
+  { key: "esci", label: "ESCI", color: S5 }, { key: "scopus", label: "Scopus", color: S7 }, { key: "kci", label: "KCI", color: S4 },
+];
+const IDX_LABEL: Record<string, string> = Object.fromEntries(IDX.map((x) => [x.key, x.label]));
+const NONE_KEY = "none";
+
+interface JStat { name: string; papers: number; idx: Set<string>; jif: number | null }
+
+function journalStats(papers: ChartPaper[]): JStat[] {
+  const m = new Map<string, JStat>();
+  for (const p of papers) {
+    const name = (p.journal ?? "").trim();
+    if (!name) continue;
+    const e = m.get(name) ?? { name, papers: 0, idx: new Set<string>(), jif: null };
+    e.papers += 1;
+    for (const k of p.meta?.indexes ?? []) if (k in IDX_LABEL) e.idx.add(k);
+    const j = Number(p.meta?.jif);
+    if (Number.isFinite(j) && j > 0 && e.jif === null) e.jif = j;
+    m.set(name, e);
+  }
+  return [...m.values()];
+}
+
+const JIF_BINS: { label: string; lo: number; hi: number }[] = [
+  { label: "<1", lo: 0, hi: 1 }, { label: "1–2", lo: 1, hi: 2 }, { label: "2–4", lo: 2, hi: 4 },
+  { label: "4–8", lo: 4, hi: 8 }, { label: "8–16", lo: 8, hi: 16 }, { label: "16+", lo: 16, hi: Infinity },
+];
+const jifText = (j: number | null) => (j === null ? "–" : j === 0.05 ? "<0.1" : j.toFixed(1));
+
+function JournalIndexCards({ papers, known, note }: { papers: ChartPaper[]; known: string[]; note?: string }) {
+  const stats = useMemo(() => journalStats(papers), [papers]);
+  const [sel, setSel] = useState<string>("");
+  if (!stats.length) return null;
+
+  const keys = IDX.filter((x) => known.includes(x.key));
+  const withIdx = (k: string) => stats.filter((s) => (k === NONE_KEY ? !keys.some((x) => s.idx.has(x.key)) : s.idx.has(k)));
+  const paperSum = (arr: JStat[]) => arr.reduce((p, s) => p + s.papers, 0);
+  const noneJ = withIdx(NONE_KEY);
+  const first = keys.find((x) => withIdx(x.key).length > 0)?.key ?? NONE_KEY;
+  const active = sel && (sel === NONE_KEY || known.includes(sel)) ? sel : first;
+  const activeList = withIdx(active).sort((a, b) => b.papers - a.papers || a.name.localeCompare(b.name));
+  const activeLabel = active === NONE_KEY ? "색인 미확인" : IDX_LABEL[active];
+  const activeColor = active === NONE_KEY ? GRAY : IDX.find((x) => x.key === active)?.color ?? S1;
+
+  // 색인 조합(한 저널이 여러 색인에 동시에 속할 수 있음)
+  const combos = new Map<string, JStat[]>();
+  for (const s of stats) {
+    const ks = keys.filter((x) => s.idx.has(x.key)).map((x) => x.label);
+    const label = ks.length ? ks.join(" + ") : "색인 미확인";
+    combos.set(label, [...(combos.get(label) ?? []), s]);
+  }
+  const comboRows = [...combos.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 8);
+
+  const jBins = JIF_BINS.map((b) => stats.filter((s) => s.jif !== null && s.jif >= b.lo && s.jif < b.hi).length);
+  const noJif = stats.filter((s) => s.jif === null).length;
+  const jifPts: Pt[] = [
+    ...JIF_BINS.map((b, i) => ({ label: b.label, value: jBins[i], tip: `JIF ${b.label}: 저널 ${jBins[i]}개` })),
+    { label: "없음", value: noJif, tip: `JIF 없음: 저널 ${noJif}개` },
+  ];
+
+  return (
+    <>
+      <Card title="색인별 저널 수" sub={`검색에 나온 저널 ${stats.length}개를 색인으로 구분 (한 저널이 여러 색인에 속할 수 있음)${note ? " · " + note : ""}`}
+        table={{ head: ["색인", "저널 수", "논문 수"], rows: [...keys.map((x) => [x.label, withIdx(x.key).length, paperSum(withIdx(x.key))] as (string | number)[]), ["색인 미확인", noneJ.length, paperSum(noneJ)]] }}>
+        <HBars labelW="w-20" valueW="w-24" rows={[
+          ...keys.map((x) => ({ label: x.label, value: withIdx(x.key).length, color: x.color, valueText: `${withIdx(x.key).length}개 · ${paperSum(withIdx(x.key))}편`, tip: `${x.label}: 저널 ${withIdx(x.key).length}개, 논문 ${paperSum(withIdx(x.key))}편` })),
+          { label: "색인 미확인", value: noneJ.length, color: GRAY, valueText: `${noneJ.length}개 · ${paperSum(noneJ)}편`, tip: "어느 색인에서도 확인되지 않은 저널" },
+        ]} />
+      </Card>
+
+      <Card title="색인별 저널 이름" sub="색인을 눌러 해당 색인에 속한 저널 이름과 논문 수를 봅니다"
+        table={{ head: ["저널", "논문 수", "JIF", "색인"], rows: [...stats].sort((a, b) => b.papers - a.papers).map((s) => [s.name, s.papers, jifText(s.jif), keys.filter((x) => s.idx.has(x.key)).map((x) => x.label).join(" · ") || "미확인"]) }}>
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {[...keys.map((x) => ({ key: x.key, label: x.label, color: x.color })), { key: NONE_KEY, label: "미확인", color: GRAY }].map((x) => {
+            const n = withIdx(x.key).length;
+            const on = active === x.key;
+            return (
+              <button key={x.key} type="button" onClick={() => setSel(x.key)} disabled={n === 0} aria-pressed={on}
+                className={`px-2 py-0.5 rounded-md border text-[11px] ${on ? "border-white/40 bg-white/10 text-white/90" : "border-white/[0.08] text-white/45"} ${n === 0 ? "opacity-35 cursor-default" : "hover:text-white/70"}`}>
+                <span className="inline-block w-2 h-2 rounded-sm mr-1 align-middle" style={{ background: x.color }} />{x.label} {n}
+              </button>
+            );
+          })}
+        </div>
+        <HBars labelW="w-44" valueW="w-10" color={activeColor} valueFmt={(v) => `${v}편`} empty={`${activeLabel}에 속한 저널이 없습니다.`}
+          rows={activeList.slice(0, 14).map((s) => ({ label: s.name, value: s.papers, tip: `${s.name} · ${s.papers}편${s.jif ? " · JIF " + jifText(s.jif) : ""}` }))} />
+        {activeList.length > 14 && <p className="text-[11px] text-white/30 mt-1">상위 14개 표시 · 전체 {activeList.length}개는 "표" 버튼에서 볼 수 있습니다.</p>}
+      </Card>
+
+      <Card title="색인 조합별 저널" sub="같은 색인 조합에 속한 저널 수 (예: SCIE + Scopus)"
+        table={{ head: ["조합", "저널 수", "저널 예시"], rows: comboRows.map(([l, a]) => [l, a.length, a.slice(0, 3).map((s) => s.name).join(", ")]) }}>
+        <HBars labelW="w-32" valueW="w-12" color={S1} valueFmt={(v) => `${v}개`}
+          rows={comboRows.map(([l, a]) => ({ label: l, value: a.length, color: l === "색인 미확인" ? GRAY : S1, tip: `${l}: ${a.slice(0, 6).map((s) => s.name).join(", ")}${a.length > 6 ? " 외" : ""}` }))} />
+      </Card>
+
+      {stats.some((s) => s.jif !== null) && (
+        <Card title="저널 JIF 분포" sub="검색에 나온 저널을 JIF 구간으로 나눈 저널 수" table={{ head: ["JIF 구간", "저널 수"], rows: jifPts.map((p) => [p.label, p.value]) }}>
+          <Columns aria="저널 JIF 구간별 저널 수" color={S2} yFmt={(v) => String(Math.round(v))} pts={jifPts} />
+        </Card>
+      )}
+    </>
+  );
+}
+
+export default function LlbChartDashboard({ insights, papers, lower, query = "", knownIndexes = ["scie", "ssci", "ahci", "esci", "scopus", "kci"], indexNote }: { insights: any | null; papers: ChartPaper[]; lower?: boolean; query?: string; knownIndexes?: string[]; indexNote?: string }) {
   const text = useMemo(() => wordStats(papers, query), [papers, query]);
   const yearly: any[] = useMemo(() => {
     if (!insights) return [];
@@ -438,6 +546,7 @@ export default function LlbChartDashboard({ insights, papers, lower, query = "" 
             <HBars valueFmt={compact} rows={langs.slice(0, 6).map((l) => ({ label: LANG_NAME[l.lang] ?? (l.lang || "미상"), value: Number(l.n) }))} />
           </Card>
         )}
+        {papers.length > 0 && <JournalIndexCards papers={papers} known={knownIndexes} note={indexNote} />}
         {papers.length > 0 && (
           <Card title="상위 저널" sub={`지금 보이는 ${papers.length}편 중 편수 상위`} table={{ head: ["저널", "편수"], rows: page.journals.map(([j, n]) => [j, n]) }}>
             <HBars color={S5} valueFmt={(v) => `${v}편`} empty="저널 정보가 없습니다." rows={page.journals.map(([j, n]) => ({ label: j, value: n }))} />

@@ -5,6 +5,7 @@ import {
 } from "@/lib/literature/scholar-ranking";
 import { searchLlb } from "@/lib/literature/llb-search";
 import { syncLlbEndpoint } from "@/lib/literature/llb-endpoint";
+import { lookupJcr, JCR_VERSION } from "@/lib/literature/jcr";
 
 // LLB 검색은 1억 6천만 건 표를 읽어 흔한 단어는 20~60초가 걸릴 수 있다(함수 기본 제한 안에 끊기지 않게).
 export const maxDuration = 120;
@@ -473,6 +474,27 @@ async function searchLocalLlb(sp: URLSearchParams, query: string, limit: number,
   return { total: r.total, lowerBound: !!r.totalIsLowerBound, stage: r.stage, ms: r.ms, results: r.results.map((x: any, i: number) => llbRowToPaper(x, i, max)) };
 }
 
+/**
+ * L1(공개 API) 결과에 Clarivate JCR(2025 JIF, 2026 공개) 값을 부착한다. 저널 이름으로 맞추며, 못 찾으면 meta 를 건드리지 않는다.
+ * 이 값은 LLB 의 meta 와 같은 모양(jif, jifQ, indexes)이라 화면이 같은 배지를 쓴다.
+ */
+function attachJcr(list: PaperResult[]): { list: PaperResult[]; matched: number } {
+  let matched = 0;
+  const out = list.map((p) => {
+    const j = p.journal ? lookupJcr(p.journal) : null;
+    if (!j) return p;
+    matched += 1;
+    return {
+      ...p,
+      meta: {
+        ...(p.meta ?? {}),
+        jif: j.jif, jifQ: j.q, jif5: j.jif5, indexes: j.indexes, jcr: true, jcrCategory: j.category, jcrName: j.name,
+      },
+    };
+  });
+  return { list: out, matched };
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // GET Handler
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -653,11 +675,14 @@ export async function GET(req: NextRequest) {
     // 중복 제거 → 프로젝트 맥락 랭킹 → similarity 내림차순
     allResults = dedup(allResults);
     allResults = rankScholarPapers(allResults, { method, projectKeywords });
+    const jcr = attachJcr(allResults);
+    allResults = jcr.list;
 
     return NextResponse.json({
       results: allResults,
       total: allResults.length,
       sources: activeSources,
+      jcr: { version: JCR_VERSION, matched: jcr.matched, total: allResults.length },
       region,
       note: region === "domestic"
         ? "국내 논문 중 DOI가 있는 논문은 OpenAlex/CrossRef에서 검색됩니다. RISS, DBpia 등은 공개 API가 없어 직접 검색 링크를 제공합니다."
