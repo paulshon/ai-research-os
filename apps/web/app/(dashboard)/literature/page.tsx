@@ -17,11 +17,9 @@ import CorpusModeToggle, { type CorpusMode } from "@/components/literature/corpu
 
 const LIT_TABS = [
   { id: "search", icon: "🔍", label: "literaturePage.tabSearch" },
-  { id: "reading", icon: "📖", label: "literaturePage.tabReading" },
   { id: "matrix", icon: "📊", label: "literaturePage.tabMatrix" },
   { id: "citation", icon: "📎", label: "literaturePage.tabCitation" },
   { id: "gap", icon: "🔬", label: "literaturePage.tabGap" },
-  { id: "collections", icon: "📁", label: "literaturePage.tabCollections" },
 ];
 
 interface ReferenceItem {
@@ -64,7 +62,7 @@ export default function LiteraturePage() {
   );
   const handleLoad = useCallback((data: unknown) => {
     const d = data as LitDraft;
-    if (d.tab) setTab(d.tab);
+    if (d.tab && LIT_TABS.some((x) => x.id === d.tab)) setTab(d.tab);
     if (d.references) setReferences(d.references);
     if (d.gapResult) setGapResult(d.gapResult);
     if (d.userNotes !== undefined) setUserNotes(d.userNotes);
@@ -501,20 +499,6 @@ export default function LiteraturePage() {
             </div>
           )}
 
-          {tab === "reading" && (
-            <div>
-              <h2 className="text-[21px] font-bold font-nanum-myeongjo mb-4"><Icon name="📖" className="inline-flex align-[-0.125em] mr-1" size={15} />{t("literaturePage.readingSpace")}</h2>
-              <div className="p-5 rounded-[16px] bg-[#13161e] border border-white/[0.04] min-h-[400px]">
-                <textarea
-                  value={userNotes}
-                  onChange={(e) => setUserNotes(e.target.value)}
-                  className="w-full min-h-[350px] bg-transparent text-[16px] text-white/70 leading-[1.8] resize-none focus:outline-none"
-                  placeholder={t("literaturePage.readingSpacePlaceholder")}
-                />
-              </div>
-            </div>
-          )}
-
           {tab === "matrix" && (
             <div>
               <h2 className="text-[21px] font-bold font-nanum-myeongjo mb-4">{t("literaturePage.comparisonMatrixTitle")}</h2>
@@ -566,15 +550,6 @@ export default function LiteraturePage() {
             />
           )}
 
-          {tab === "collections" && (
-            <div className="flex items-center justify-center min-h-[400px]">
-              <div className="text-center">
-                <p className="text-[35px] mb-3 flex justify-center"><Icon name="folder" size={30} /></p>
-                <p className="text-[18px] text-white/40 font-medium">{t("literaturePage.collections")}</p>
-                <p className="text-[15px] text-white/20 mt-2">{t("literaturePage.collectionsComingSoon")}</p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>

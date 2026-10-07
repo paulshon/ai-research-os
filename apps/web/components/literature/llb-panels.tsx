@@ -6,7 +6,6 @@ import NetworkExplorer from "@/components/literature/network-explorer";
 import LlbDashboard from "@/components/literature/llb-dashboard";
 import LiteratureEngineTools from "@/components/literature/literature-engine-tools";
 import { useAppStore } from "@/store/app-store";
-import { LLB_STACK } from "@/lib/literature/llb-nav";
 import LlbChartDashboard from "@/components/literature/llb-charts";
 import DonutLoader from "@/components/literature/donut-loader";
 
@@ -275,35 +274,6 @@ export function LlbSearchPanel() {
       {selected.length > 0 && (
         <p className="text-[13px] text-[#e8b84b]">선택 {selected.length}편 — 네트워크/갭/군집 분석 페이지에서 활용 가능</p>
       )}
-    </div>
-  );
-}
-
-export function LlbDatabasesPanel() {
-  return (
-    <div className="p-4 md:p-6 space-y-5">
-      <header>
-        <h2 className="text-[22px] font-bold font-nanum-myeongjo">LLB DB 목록</h2>
-        <p className="text-[14px] text-white/35 mt-1">로컬문헌기반 Scholar Stack 구성</p>
-      </header>
-      <div className="grid gap-4 md:grid-cols-3">
-        {LLB_STACK.map((s) => (
-          <div key={s.drive} className="p-5 rounded-2xl bg-[#13161e] border border-white/[0.05]">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.accent }} />
-              <span className="text-[18px] font-semibold text-white">{s.drive}</span>
-            </div>
-            <p className="text-[16px] text-white/80 font-medium">{s.name}</p>
-            <p className="text-[14px] text-white/50 mt-0.5">{s.nameKo}</p>
-            <p className="text-[13px] text-white/35 mt-3 leading-relaxed">{s.role}</p>
-            <p className="text-[12px] text-white/20 mt-3 font-mono break-all">{s.path}</p>
-          </div>
-        ))}
-      </div>
-      <div className="p-4 rounded-xl bg-[#e8b84b]/08 border border-[#e8b84b]/15 text-[14px] text-white/50">
-        ClickHouse(<code className="text-[#e8b84b]/80">openalex.papers</code>) 적재가 끝나면 LLB 검색이 로컬 인덱스를 1순위로 사용합니다.
-        적재 전에는 공개 API를 LLB 모드 라벨로 보강 호출합니다.
-      </div>
     </div>
   );
 }

@@ -20,11 +20,9 @@ export const MENU_CATALOG: MenuNode[] = [
     code: "engine.literature", label: "문헌 연구", href: "/literature",
     children: [
       { code: "engine.literature.search", label: "논문 검색" },
-      { code: "engine.literature.reading", label: "읽기 공간" },
       { code: "engine.literature.matrix", label: "문헌 매트릭스" },
       { code: "engine.literature.citation", label: "인용 관리" },
       { code: "engine.literature.gap", label: "갭 분석" },
-      { code: "engine.literature.collection", label: "컬렉션" },
     ],
   },
   {
@@ -103,8 +101,8 @@ export const ROUTE_TO_CODE: { prefix: string; code: string }[] = MENU_CATALOG
 export const FREE_ALLOWED: string[] = [
   "engine.research",
   "engine.literature",
-  ...["engine.literature.search", "engine.literature.reading", "engine.literature.matrix",
-      "engine.literature.citation", "engine.literature.gap", "engine.literature.collection"],
+  ...["engine.literature.search", "engine.literature.matrix",
+      "engine.literature.citation", "engine.literature.gap"],
   "engine.writing",
   "engine.writing.quant",
   "engine.writing.qual",
