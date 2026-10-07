@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useGemini } from "@/hooks/use-gemini";
-import NetworkAnalysis from "@/components/literature/network-analysis";
+import NetworkExplorer from "@/components/literature/network-explorer";
 import LiteratureAnalyticsPanel, {
   type GraphVisualStyle,
 } from "@/components/literature/literature-analytics-panel";
@@ -327,29 +327,11 @@ function useLlbWorkingSet() {
 }
 
 export function LlbNetworkPanel() {
-  const { papers, q, setQ, loading, load } = useLlbWorkingSet();
-  const net = useMemo(
-    () =>
-      papers.map((p) => ({
-        id: p.id,
-        title: p.title,
-        authors: p.authors,
-        year: p.year,
-        journal: p.journal,
-        keywords: p.keywords,
-      })),
-    [papers],
-  );
+  // 검색 순위 상위 N편(40~15,000)을 서버(/api/scholar/network)가 모아 11종 네트워크·중심성·군집으로 분석한다.
   return (
     <div className="p-4 md:p-6 space-y-4">
       <h2 className="text-[22px] font-bold font-nanum-myeongjo">LLB 네트워크분석</h2>
-      <div className="flex gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-[#13161e] border border-white/[0.06] text-white text-[14px]" />
-        <button type="button" onClick={load} className="px-4 py-2 rounded-lg bg-[#e8b84b]/20 text-[#e8b84b] border border-[#e8b84b]/30 text-[14px]">
-          {loading ? "…" : "코퍼스 로드"}
-        </button>
-      </div>
-      <NetworkAnalysis papers={net} />
+      <NetworkExplorer initialQuery="artificial intelligence" />
     </div>
   );
 }

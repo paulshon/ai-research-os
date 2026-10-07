@@ -41,7 +41,7 @@ async function chRows(sql: string, params: Record<string, string>, signal: Abort
 let last: LlbStatus | null = null;
 let lastAt = 0;
 // 읽기 전용 외부 계정은 system.processes / system.merges 권한이 없다. 한 번 거부되면 다시 묻지 않는다(매번 오류가 쌓여 계정 오류 한도를 소모함).
-const denied = { procs: false, merges: false };
+const denied = { procs: false, merges: false, meta: false };
 const CACHE_MS = 15_000;
 
 export async function statusLlb(): Promise<LlbStatus> {
@@ -49,7 +49,7 @@ export async function statusLlb(): Promise<LlbStatus> {
   const signal = AbortSignal.timeout(25000);
   try {
     // 표 개수만 필수. 진행 중 적재·병합 수는 부가 정보라, 권한이 없어도 연결 상태는 정상으로 본다.
-    const optional = (key: "procs" | "merges", p: () => Promise<any[]>): Promise<any[]> => {
+    const optional = (key: "procs" | "merges" | "meta", p: () => Promise<any[]>): Promise<any[]> => {
       if (denied[key]) return Promise.resolve([]);
       return p().catch((e: any) => {
         if (e?.name === "TimeoutError" || e?.name === "AbortError") throw e;
@@ -57,7 +57,7 @@ export async function statusLlb(): Promise<LlbStatus> {
         return [] as any[];
       });
     };
-    const [tables, procs, merges] = await Promise.all([
+    const [tables, procs, merges, meta] = await Promise.all([
       chRows(
         `SELECT name, total_rows FROM system.tables WHERE (database = {db:String} AND name = 'lit_papers') OR (database = {src:String} AND name = 'papers_v2')`,
         { db: DB, src: SRC }, signal,
@@ -67,10 +67,14 @@ export async function statusLlb(): Promise<LlbStatus> {
         {}, signal,
       )),
       optional("merges", () => chRows(`SELECT count() AS n FROM system.merges WHERE database = {db:String} AND table = 'lit_papers'`, { db: DB }, signal)),
+      // lit_papers 는 papers_v2 의 부분집합(연구용 논문·학술대회 논문·학위논문)이라 papers_v2 전체 행 수를 분모로 쓰면 100% 에 닿지 못한다.
+      // 적재 대상 수(eligible_rows)가 lit_meta 에 있으면 그것을 분모로 쓴다. 표가 없으면(예전 DB) 옛 방식(papers_v2 행 수)으로 돌아간다.
+      optional("meta", () => chRows(`SELECT value FROM ${DB}.lit_meta FINAL WHERE key = 'eligible_rows' LIMIT 1`, {}, signal)),
     ]);
     const rows = (name: string) => Number(tables.find((t) => t.name === name)?.total_rows ?? 0);
     const servedRows = rows("lit_papers");
-    const sourceRows = rows("papers_v2");
+    const eligible = Number(meta[0]?.value ?? 0);
+    const sourceRows = eligible > 0 ? eligible : rows("papers_v2");
     const activeInserts = Number(procs[0]?.n ?? 0);
     const percent = sourceRows > 0 ? Math.min(100, (servedRows / sourceRows) * 100) : null;
     const loading = activeInserts > 0;
