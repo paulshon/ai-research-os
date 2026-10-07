@@ -1,7 +1,7 @@
 "use client";
 
 /* ════════════════════════════════════════════════════════════
-   LLB 네트워크 탐색기 — 상위 N편(40~15,000) × 11종 네트워크 × 중심성·군집 지표
+   LLB 네트워크 탐색기 — 상위 N편(40~10,000) × 11종 네트워크 × 중심성·군집 지표
    - 서버(/api/scholar/network)가 검색 순위대로 상위 N편을 모아 노드·엣지를 만들고, 이 화면이 지표·군집·배치를 계산해 그린다.
    - 노드 모양은 종류별(저자=원, 키워드=둥근 사각형, 저널=육각형, 기관=마름모, 후원기관=오각형, MeSH=팔각형, 개념=삼각형)
    - 크기 = 선택한 중심성, 색 = 군집(Louvain)/종류/평균 연도
@@ -21,7 +21,7 @@ interface NetworkResponse {
 type SizeBy = "degree" | "strength" | "betweenness" | "closeness" | "pagerank" | "count" | "cited";
 type ColorBy = "community" | "kind" | "year";
 
-const SCOPES = [40, 100, 200, 500, 1000, 5000, 15000];
+const SCOPES = [40, 100, 200, 500, 1000, 5000, 10000];
 const PALETTE = ["#6c8cff", "#3ecfb2", "#e8b84b", "#f472b6", "#a78bfa", "#fb923c", "#34d399", "#60a5fa", "#f87171", "#c084fc", "#facc15", "#2dd4bf"];
 const KIND_COLOR: Record<NodeKind, string> = {
   author: "#6c8cff", keyword: "#3ecfb2", journal: "#e8b84b", institution: "#f472b6", country: "#34d399", funder: "#fb923c", mesh: "#60a5fa", concept: "#c084fc", paper: "#f87171",
@@ -245,7 +245,7 @@ export default function NetworkExplorer({
               <option value="relevance">관련도</option><option value="cited">인용순</option><option value="fwci">FWCI순</option><option value="year">최신순</option>
             </select>
           </label>
-          <span className="text-[12px] text-white/25 ml-2">큰 범위일수록 첫 계산이 오래 걸립니다(1만 편 이상은 수십 초).</span>
+          <span className="text-[12px] text-white/25 ml-2">큰 범위일수록 첫 계산이 오래 걸립니다(5천 편 이상은 1분 안팎).</span>
         </div>
         {res && (
           <div className="flex flex-wrap gap-2 text-[14px]">

@@ -1,5 +1,6 @@
 # LLB supervisor (ASCII only). Keeps the whole chain alive without human help:
-#   E: drive -> Docker Desktop -> lit-ch (ClickHouse) -> gateway (node) -> cloudflared tunnel -> new URL written to Supabase
+#   E: drive -> Docker Desktop -> ch-v2 (ClickHouse, new lit_papers, port 18123) -> gateway (node, port 18124) -> cloudflared tunnel -> new URL written to Supabase
+# 2026-10-07: moved from lit-ch (8123/8124) to ch-v2; the gateway port is 18124 because Windows reserves 8124-8223 on this PC
 # - waits for each stage to be ready (external disk / Docker may come up late after boot)
 # - checks every 20 s, restarts whatever died, re-publishes the tunnel URL when it changes (and every 10 min)
 # - blocks idle sleep while running (no power-plan change needed)
@@ -10,6 +11,9 @@ $root    = Split-Path $PSScriptRoot -Parent
 $envFile = 'E:\CH_lit\llb-access.env'
 $logFile = 'E:\CH_lit\llb-supervisor.log'
 $tunnelLog = Join-Path $env:TEMP 'llb-cloudflared.log'
+$CH_CONTAINER = 'ch-v2'
+$CH_PORT = 18123
+$GW_PORT = 18124
 $script:url = $null
 $script:cf = $null
 $script:lastPublish = [datetime]::MinValue
@@ -40,6 +44,8 @@ function Load-Env {
     $l = $_.TrimStart([char]0xFEFF).Trim()
     if ($l -match '^(\w+)\s*=\s*(.*)$') { Set-Item "env:$($Matches[1])" ($Matches[2].Trim().Trim('"', "'", '<', '>').Trim()) }
   }
+  $env:CH_URL = "http://127.0.0.1:$CH_PORT"      # the gateway reads these two
+  $env:GATEWAY_PORT = "$GW_PORT"
 }
 
 function Http-Status($uri, $timeout = 8) {
@@ -57,11 +63,13 @@ function Wait-Until($what, [scriptblock]$test, $maxSec) {
 }
 
 function Docker-Ready { docker info *> $null; return ($LASTEXITCODE -eq 0) }
-function Ch-Ready     { return ((Http-Status 'http://127.0.0.1:8123/ping' 5) -eq 200) }
-function Gw-Ready     { $s = Http-Status 'http://127.0.0.1:8124/ping' 5; return ($s -eq 200 -or $s -eq 401) }
+function Ch-Ready     { return ((Http-Status "http://127.0.0.1:$CH_PORT/ping" 5) -eq 200) }
+function Gw-Ready     { $s = Http-Status "http://127.0.0.1:$GW_PORT/ping" 5; return ($s -eq 200 -or $s -eq 401) }
 
 function Ensure-Disk {
   if (-not (Wait-Until 'E:\CH_lit' { Test-Path 'E:\CH_lit\llb-access.env' } 600)) { return $false }
+  if (-not (Wait-Until 'E:\CH_ch2_data' { Test-Path 'E:\CH_ch2_data\store' } 600)) { return $false }     # lit_papers parts live on E:
+  [void](Wait-Until 'K:\OpenAlex_Snapshot (parquet bind mount of ch-v2)' { Test-Path 'K:\OpenAlex_Snapshot\data\parquet' } 120)   # not fatal: ch-v2 binds it read-only
   return $true
 }
 
@@ -77,8 +85,8 @@ function Ensure-Docker {
 
 function Ensure-Clickhouse {
   if (Ch-Ready) { return $true }
-  Log 'starting lit-ch'
-  docker start lit-ch *> $null
+  Log "starting $CH_CONTAINER"
+  docker start $CH_CONTAINER *> $null
   return (Wait-Until 'clickhouse ping' { Ch-Ready } 300)
 }
 
@@ -116,7 +124,7 @@ function Start-Tunnel {
   Refresh-Path
   Remove-Item $tunnelLog -ErrorAction SilentlyContinue
   Log 'starting cloudflared'
-  $script:cf = Start-Process cloudflared -ArgumentList 'tunnel','--url','http://127.0.0.1:8124' -RedirectStandardError $tunnelLog -PassThru -WindowStyle Hidden
+  $script:cf = Start-Process cloudflared -ArgumentList 'tunnel','--url',"http://127.0.0.1:$GW_PORT" -RedirectStandardError $tunnelLog -PassThru -WindowStyle Hidden
   for ($i = 0; $i -lt 30 -and -not $script:url; $i++) {
     Start-Sleep 2
     if (Test-Path $tunnelLog) {

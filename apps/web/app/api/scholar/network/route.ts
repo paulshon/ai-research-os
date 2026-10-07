@@ -8,7 +8,7 @@ export const maxDuration = 120;
 
 /**
  * GET /api/scholar/network?q=…&kind=coauthor&scope=100[&yearFrom=&yearTo=&lang=&indexes=&minJif=&jifQuartile=&oaOnly=1&hasAbstract=1&area=&types=]
- *   scope: 분석할 상위 편수(40·100·200·500·1000·5000·15000). 검색 화면과 같은 순위·같은 필터.
+ *   scope: 분석할 상위 편수(40·100·200·500·1000·5000·10000). 검색 화면과 같은 순위·같은 필터.
  *   응답: 전체 일치 편수(matched), 실제 분석한 편수(sampleSize), 노드·엣지, 표본 요약(summary).
  */
 export async function GET(req: NextRequest) {

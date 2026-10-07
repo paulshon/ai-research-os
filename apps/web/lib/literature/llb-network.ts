@@ -1,4 +1,4 @@
-// LLB 네트워크 분석용 서버 도우미 — 검색 조건에 맞는 상위 N편(40~15,000)을 모아 11종 네트워크를 만든다.
+// LLB 네트워크 분석용 서버 도우미 — 검색 조건에 맞는 상위 N편(40~10,000)을 모아 11종 네트워크를 만든다.
 // 검색 SQL(순위·필터)은 생성 파일 llb-search.ts 의 buildSearch() 를 그대로 쓴다(검색 화면과 같은 순위·같은 필터).
 // 이 파일은 생성 파일이 아니므로 직접 수정해도 된다.
 
@@ -6,20 +6,20 @@ import { buildSearch, searchLlb, networkLlb } from "@/lib/literature/llb-search"
 import { buildGraph, summarize, type NetKind, type NetRecord, type Graph, type Summary } from "@/lib/literature/network-graph";
 
 const DB = process.env.LLB_DB || "openalex";
-export const MAX_SCOPE = 15000;          // 게이트웨이 본문 한도(256 KB)와 서버 메모리 안에서 안전한 최대 표본
-export const SCOPES = [40, 100, 200, 500, 1000, 5000, 15000];
+export const MAX_SCOPE = 10000;          // 서버 메모리·응답 시간 안에서 안전한 최대 표본
+export const SCOPES = [40, 100, 200, 500, 1000, 5000, 10000];
 
 // ClickHouse HTTP: 값은 이스케이프된 텍스트(백슬래시·탭·개행·CR)
 const esc = (x: unknown) => String(x).replace(/\\/g, "\\\\").replace(/\t/g, "\\t").replace(/\n/g, "\\n").replace(/\r/g, "\\r");
 const quote = (x: unknown) => "'" + String(x).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r") + "'";
 const paramValue = (v: unknown) => (Array.isArray(v) ? "[" + v.map(quote).join(",") + "]" : esc(v));
 
-/** SQL 은 본문으로 보낸다(긴 wid 목록이 URL 한도를 넘지 않게). 값은 param_* 로만 전달한다. */
+/** SQL 은 본문으로 보낸다(URL 길이 한도를 피함). 값은 param_* 로만 전달한다. */
 async function ch(sql: string, params: Record<string, unknown> = {}, timeoutS = 90): Promise<any[]> {
   const url = new URL(process.env.CLICKHOUSE_URL || "http://127.0.0.1:8123");
   url.searchParams.set("default_format", "JSONEachRow");
   url.searchParams.set("max_execution_time", String(Math.max(Number(process.env.LLB_TIMEOUT_S || 15), timeoutS)));
-  url.searchParams.set("max_result_rows", "1000000");
+  url.searchParams.set("max_result_rows", "100000");   // 읽기 전용 계정(llb_ro)의 상한이 100000 이다 — 이보다 크게 요청하면 거부된다
   for (const [k, v] of Object.entries(params)) url.searchParams.set("param_" + k, paramValue(v));
   const headers: Record<string, string> = { "content-type": "text/plain; charset=utf-8" };
   if (process.env.CLICKHOUSE_USER) {
@@ -61,11 +61,19 @@ const arr = (x: unknown): string[] => (Array.isArray(x) ? x.map(String) : []);
 async function loadRecords(wids: number[]): Promise<NetRecord[]> {
   if (wids.length === 0) return [];
   const ids = wids.map((w) => Math.trunc(Number(w))).filter((w) => Number.isFinite(w) && w > 0);   // 숫자만 SQL 에 넣는다
-  const rows = await ch(
-    `SELECT wid, title, year, cited, journal, author_names, keywords, inst_names, countries, funders, mesh_terms, concepts, fwci_oa, jif
-     FROM ${DB}.lit_papers WHERE wid IN (${ids.join(",")}) FORMAT JSONEachRow`,
-    {}, 110,
-  );
+  // 게이트웨이는 질의를 URL 항목으로 ClickHouse 에 넘기고, ClickHouse 는 항목 하나를 128 KB 로 제한한다 → wid 목록을 5,000개씩 나눠 읽는다
+  const CHUNK = 5000;
+  const parts: number[][] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) parts.push(ids.slice(i, i + CHUNK));
+  const rows: any[] = [];
+  for (let i = 0; i < parts.length; i += 3) {
+    const got = await Promise.all(parts.slice(i, i + 3).map((chunk) => ch(
+      `SELECT wid, title, year, cited, journal, author_names, keywords, inst_names, countries, funders, mesh_terms, concepts, fwci_oa, jif
+       FROM ${DB}.lit_papers WHERE wid IN (${chunk.join(",")}) FORMAT JSONEachRow`,
+      {}, 110,
+    )));
+    for (const g of got) rows.push(...g);
+  }
   const rank = new Map(ids.map((w, i) => [w, i + 1]));
   const seen = new Set<number>();
   const out: NetRecord[] = [];
