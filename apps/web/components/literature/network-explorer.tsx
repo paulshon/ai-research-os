@@ -336,7 +336,14 @@ export default function NetworkExplorer({
                 <svg ref={svgRef} viewBox={vb} data-base-viewbox={`0 0 ${W} ${H}`} className="w-full h-auto select-none" style={{ maxHeight: 640, cursor: drag.current ? "grabbing" : "grab" }}
                   onWheel={onWheel}
                   onMouseDown={(e) => { drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; }}
-                  onMouseMove={(e) => { if (drag.current) { const sc = (W / view.k) / (e.currentTarget.getBoundingClientRect().width || W); setView((v) => ({ ...v, x: drag.current!.vx + (e.clientX - drag.current!.x) * sc, y: drag.current!.vy + (e.clientY - drag.current!.y) * sc })); } }}
+                  onMouseMove={(e) => {
+                    const d = drag.current;
+                    if (!d) return;
+                    // 값은 지금 계산해 둔다: setView 의 갱신 함수는 나중에 실행되는데 그때 drag.current 는 이미 null(마우스를 뗌)일 수 있다
+                    const sc = (W / view.k) / (e.currentTarget.getBoundingClientRect().width || W);
+                    const nx = d.vx + (e.clientX - d.x) * sc, ny = d.vy + (e.clientY - d.y) * sc;
+                    setView((v) => ({ ...v, x: nx, y: ny }));
+                  }}
                   onMouseUp={() => { drag.current = null; }} onMouseLeave={() => { drag.current = null; setHover(null); }}
                   onClick={(e) => { if (e.target === e.currentTarget || (e.target as Element).tagName === "rect") setSelected(null); }}>
                   <defs>
