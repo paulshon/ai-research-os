@@ -1,5 +1,7 @@
 # LLB(로컬문헌기반) — ClickHouse 연동
 
+> **v3 변경**: 검색 DB 가 새 컨테이너 `ch-v2`(127.0.0.1:18123, 174,194,577행)로 바뀌었고 게이트웨이 포트는 18124 다. 운영·이전은 `docs/LLB-OPS.md`, 네트워크 분석은 `docs/LLB-NETWORK.md`, 변경 내역은 `CHANGELOG-RDOS-LLB-v3.md`.
+
 LLB 화면(`/llb/*`)과 `GET /api/scholar?corpus=llb` 는 ClickHouse 의 정규화된 서빙 표 `openalex.lit_papers` 를 직접 검색한다.
 원본 `openalex.papers_v2`(약 5억 건)는 인용망 계산에만 쓴다.
 
@@ -9,7 +11,7 @@ LLB 화면(`/llb/*`)과 `GET /api/scholar?corpus=llb` 는 ClickHouse 의 정규�
 
 | 변수 | 기본값 | 뜻 |
 |---|---|---|
-| `CLICKHOUSE_URL` | `http://127.0.0.1:8123` | ClickHouse HTTP 주소 |
+| `CLICKHOUSE_URL` | `http://127.0.0.1:18123` (v3: ch-v2) | ClickHouse HTTP 주소 |
 | `CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD` | 빈 값 | 인증이 있을 때만 |
 | `LLB_DB` | `openalex` | `lit_papers` 가 있는 DB |
 | `LLB_SRC_DB` | `openalex` | `papers_v2` 가 있는 DB |
@@ -40,7 +42,7 @@ npm run dev --workspace @ai-research-os/web   # http://localhost:3010/llb/search
 앱 코드는 이미 `CLICKHOUSE_URL`/`USER`/`PASSWORD`(Basic 인증)를 지원하므로 앱 수정은 없다. 필요한 것은 DB를 안전하게 인터넷에 내놓는 일이다.
 
 ```
-Vercel → HTTPS 터널(cloudflared) → scripts/llb-gateway.mjs(127.0.0.1:8124) → ClickHouse lit-ch(127.0.0.1:8123, E:\CH_lit·E:\CH_fast)
+Vercel → HTTPS 터널(cloudflared) → scripts/llb-gateway.mjs(127.0.0.1:18124) → ClickHouse ch-v2(127.0.0.1:18123; 데이터 C:\CH_v2\data·E:\CH_ch2_data)
 ```
 
 1. 한 번만: `powershell -ExecutionPolicy Bypass -File scripts\llb-expose-setup.ps1` — 읽기 전용 계정 `llb_ro`(SELECT만, 메모리·시간·분당 질의 수 제한)와 비밀번호를 만든다. 비밀번호는 `E:\CH_lit\llb-access.env`.

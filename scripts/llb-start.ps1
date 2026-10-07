@@ -1,4 +1,4 @@
-﻿# LLB 외부 접속 시작: 1) lit-ch 컨테이너  2) 게이트웨이  3) Cloudflare 터널  4) 새 터널 주소를 Supabase 에 기록
+﻿# LLB 외부 접속 시작(수동): 1) ch-v2 컨테이너(v3)  2) 게이트웨이  3) Cloudflare 터널  4) 새 터널 주소를 Supabase 에 기록
 # 사용자가 직접 실행:  powershell -ExecutionPolicy Bypass -File scripts\llb-start.ps1
 # 전제: scripts\llb-expose-setup.ps1 실행 완료, cloudflared 설치, supabase/migrations/0015_llb_endpoint.sql 적용,
 #       E:\CH_lit\llb-access.env 에 아래 두 줄 추가 (Supabase 대시보드 > Project Settings > API):
@@ -10,23 +10,26 @@ $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [En
 $root = Split-Path $PSScriptRoot -Parent
 $envFile = 'E:\CH_lit\llb-access.env'
 
-docker start lit-ch | Out-Null
-for ($i = 0; $i -lt 30; $i++) { try { if ((Invoke-RestMethod http://127.0.0.1:8123/ping -TimeoutSec 3) -match 'Ok') { break } } catch {}; Start-Sleep 5 }
+docker start ch-v2 | Out-Null
+for ($i = 0; $i -lt 30; $i++) { try { if ((Invoke-RestMethod http://127.0.0.1:18123/ping -TimeoutSec 3) -match 'Ok') { break } } catch {}; Start-Sleep 5 }
 # UTF-8 로 읽고(BOM 무시), 값 앞뒤의 공백·따옴표·꺾쇠를 제거한다
 Get-Content $envFile -Encoding UTF8 | ForEach-Object {
   $line = $_.TrimStart([char]0xFEFF).Trim()
   if ($line -match '^(\w+)\s*=\s*(.*)$') { Set-Item "env:$($Matches[1])" ($Matches[2].Trim().Trim('"', "'", '<', '>').Trim()) }
 }
 
+# v3: 게이트웨이는 ch-v2(18123)에 붙고 18124 에서 듣는다(Windows 가 8124-8223 을 예약)
+$env:CH_URL = 'http://127.0.0.1:18123'
+$env:GATEWAY_PORT = '18124'
 # 게이트웨이: 이미 떠 있으면 다시 띄우지 않는다
 $gwUp = $false
-try { Invoke-WebRequest http://127.0.0.1:8124/ping -TimeoutSec 3 -UseBasicParsing | Out-Null; $gwUp = $true } catch { if ($_.Exception.Response) { $gwUp = $true } }
+try { Invoke-WebRequest http://127.0.0.1:18124/ping -TimeoutSec 3 -UseBasicParsing | Out-Null; $gwUp = $true } catch { if ($_.Exception.Response) { $gwUp = $true } }
 if (-not $gwUp) { Start-Process node -ArgumentList "`"$root\scripts\llb-gateway.mjs`"" -WindowStyle Minimized; Start-Sleep 2 }
 
 # 터널: 로그를 파일로 받아 주소를 읽는다
 $log = Join-Path $env:TEMP 'llb-cloudflared.log'
 Remove-Item $log -ErrorAction SilentlyContinue
-$cf = Start-Process cloudflared -ArgumentList 'tunnel','--url','http://127.0.0.1:8124' -RedirectStandardError $log -PassThru -WindowStyle Minimized
+$cf = Start-Process cloudflared -ArgumentList 'tunnel','--url','http://127.0.0.1:18124' -RedirectStandardError $log -PassThru -WindowStyle Minimized
 $url = $null
 for ($i = 0; $i -lt 40 -and -not $url; $i++) {
   Start-Sleep 2

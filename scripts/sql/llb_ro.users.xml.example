@@ -1,0 +1,37 @@
+<clickhouse>
+  <!-- LLB 전용 읽기 전용 계정. 복사해서 users.d/llb_ro.xml 로 두고 password_sha256_hex 만 채운다(비밀번호 해시는 저장소에 올리지 않는다).
+       해시 만들기:  echo -n '비밀번호' | sha256sum -->
+  <profiles>
+    <llb_ro>
+      <readonly>2</readonly>
+      <max_execution_time>120</max_execution_time>
+      <max_memory_usage>6000000000</max_memory_usage>
+      <max_result_rows>100000</max_result_rows>
+      <max_threads>8</max_threads>
+      <constraints>
+        <readonly><const/></readonly>
+        <max_execution_time><max>120</max></max_execution_time>
+        <max_memory_usage><max>6000000000</max></max_memory_usage>
+        <max_result_rows><max>100000</max></max_result_rows>
+        <max_threads><max>8</max></max_threads>
+      </constraints>
+    </llb_ro>
+  </profiles>
+  <quotas>
+    <llb_ro><interval><duration>60</duration><queries>120</queries><errors>60</errors></interval></llb_ro>
+  </quotas>
+  <users>
+    <llb_ro>
+      <password_sha256_hex>REPLACE_WITH_SHA256_OF_PASSWORD</password_sha256_hex>
+      <networks><ip>::/0</ip></networks>
+      <profile>llb_ro</profile>
+      <quota>llb_ro</quota>
+      <grants>
+        <query>GRANT SELECT ON openalex.lit_*</query>
+        <query>GRANT SELECT ON openalex.papers_v2</query>
+        <query>GRANT SELECT ON system.parts</query>
+        <query>GRANT SELECT ON system.tables</query>
+      </grants>
+    </llb_ro>
+  </users>
+</clickhouse>
