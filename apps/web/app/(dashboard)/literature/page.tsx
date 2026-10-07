@@ -265,7 +265,7 @@ export default function LiteraturePage() {
               <p className="text-[13px] text-white/30 mb-4">
                 {corpusMode === "l1"
                   ? "L1 · 공개 API 문헌검색 (OpenAlex · CrossRef · Semantic Scholar 등)"
-                  : "LLB · 로컬문헌기반 (F 메타원천고 · L 검색허브 · K 전문저장고)"}
+                  : "LLB · 로컬문헌기반"}
                 {corpusMode === "llb" && (
                   <>
                     {" · "}

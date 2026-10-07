@@ -11,30 +11,3 @@ export const LLB_NAV = [
 ] as const;
 
 export type LlbNavId = (typeof LLB_NAV)[number]["id"];
-
-export const LLB_STACK = [
-  {
-    drive: "F:",
-    name: "Corpus Vault",
-    nameKo: "메타원천고",
-    role: "OpenAlex Works 원본 Parquet",
-    path: "F:\\OpenAlex",
-    accent: "#3ecfb2",
-  },
-  {
-    drive: "L:",
-    name: "Index Hub",
-    nameKo: "검색허브",
-    role: "Crossref · PubMed · DataCite · ClickHouse",
-    path: "L:\\Academic + L:\\ClickHouse",
-    accent: "#6c8cff",
-  },
-  {
-    drive: "K:",
-    name: "Fulltext Store",
-    nameKo: "전문저장고",
-    role: "최근 5년·분야 OA 본문 텍스트",
-    path: "K:\\OA_Fulltext",
-    accent: "#e8b84b",
-  },
-] as const;

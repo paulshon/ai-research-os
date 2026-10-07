@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import CorpusModeToggle from "@/components/literature/corpus-mode-toggle";
 import LlbLoadStatus from "@/components/literature/llb-load-status";
-import { LLB_NAV, LLB_STACK } from "@/lib/literature/llb-nav";
+import { LLB_NAV } from "@/lib/literature/llb-nav";
 
 export default function LlbLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -54,15 +54,6 @@ export default function LlbLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="p-3 mt-2 border-t border-white/[0.04] space-y-2">
-          {LLB_STACK.map((s) => (
-            <div key={s.drive} className="px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.accent }} />
-                <span className="text-[13px] text-white/70 font-medium">{s.drive} {s.nameKo}</span>
-              </div>
-              <p className="text-[11px] text-white/25 mt-0.5 pl-3.5">{s.role}</p>
-            </div>
-          ))}
           <Link href="/literature" className="block text-center text-[13px] text-white/30 hover:text-[#3ecfb2] py-2">
             ← 문헌검색으로
           </Link>
