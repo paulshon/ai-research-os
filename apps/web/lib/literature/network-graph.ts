@@ -8,7 +8,7 @@
 
 export type NetKind =
   | "coauthor" | "coword" | "authorkw" | "journal" | "institution" | "country"
-  | "funder" | "mesh" | "concept" | "citation" | "coupling";
+  | "funder" | "mesh" | "concept" | "citation" | "coupling" | "cocitation";
 
 export type NodeKind = "author" | "keyword" | "journal" | "institution" | "country" | "funder" | "mesh" | "concept" | "paper";
 
@@ -54,6 +54,7 @@ export const NET_KINDS: { id: NetKind; label: string; node: NodeKind; desc: stri
   { id: "concept", label: "개념(Concept)", node: "concept", desc: "OpenAlex 개념 ↔ 개념 · 동시출현", color: "#c084fc" },
   { id: "citation", label: "인용 네트워크", node: "paper", desc: "논문 → 논문 · 표본 안에서의 인용 관계", color: "#f87171" },
   { id: "coupling", label: "서지 결합", node: "paper", desc: "논문 ↔ 논문 · 참고문헌을 2건 이상 공유", color: "#fbbf24" },
+  { id: "cocitation", label: "공인용(co-citation)", node: "paper", desc: "참고문헌 ↔ 참고문헌 · 표본 논문들이 함께 인용 → 지적 구조", color: "#2dd4bf" },
 ];
 
 export interface ExtraEdges {
@@ -61,13 +62,13 @@ export interface ExtraEdges {
   coupling?: { a: number; b: number; shared: number }[];
 }
 
-const norm = (s: string) => s.replace(/\s+/g, " ").trim();
-const uniq = (a: string[]) => [...new Set(a.map(norm).filter((x) => x.length > 1))];
+export const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+export const uniq = (a: string[]) => [...new Set(a.map(norm).filter((x) => x.length > 1))];
 const edgeKey = (a: string, b: string) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`);
 
 /** 기록에서 노드 항목을 뽑는 방식(종류별 상한은 한 논문이 만드는 쌍의 폭발을 막기 위한 것) */
 /** MeSH 의 일반 표지어(Check Tags)는 거의 모든 논문에 붙어 네트워크를 뭉개므로 제외한다 */
-const MESH_GENERIC = new Set(["humans", "human", "female", "male", "animals", "adult", "aged", "aged, 80 and over", "middle aged", "adolescent", "child", "child, preschool", "infant", "infant, newborn", "young adult", "mice", "rats", "retrospective studies", "prospective studies", "cohort studies", "risk factors", "reproducibility of results", "sensitivity and specificity"]);
+export const MESH_GENERIC = new Set(["humans", "human", "female", "male", "animals", "adult", "aged", "aged, 80 and over", "middle aged", "adolescent", "child", "child, preschool", "infant", "infant, newborn", "young adult", "mice", "rats", "retrospective studies", "prospective studies", "cohort studies", "risk factors", "reproducibility of results", "sensitivity and specificity"]);
 
 const FIELD: Record<string, { get: (r: NetRecord) => string[]; cap: number; node: NodeKind }> = {
   author: { get: (r) => r.authors, cap: 8, node: "author" },
@@ -191,12 +192,17 @@ export function buildGraph(
 
 export interface NodeMetrics {
   degree: number; strength: number; betweenness: number; closeness: number; pagerank: number; clustering: number; community: number;
+  constraint: number;     // Burt 제약(낮을수록 구조 공백을 많이 잇는 중개자)
+  effectiveSize: number;  // Burt 유효 크기(겹치지 않는 연결의 수)
+  core: number;           // k-core 번호(이 노드가 속한 가장 높은 k)
 }
 export interface GraphMetrics {
   nodeCount: number; edgeCount: number; density: number; avgDegree: number; components: number; giantShare: number;
   avgClustering: number; transitivity: number; modularity: number; communities: number; avgPath: number; diameter: number;
   perNode: Map<string, NodeMetrics>;
   communityList: { id: number; size: number; members: string[]; yearMean: number }[];
+  maxCore: number;
+  coreShells: { k: number; size: number }[];   // k 이상 core 에 속한 노드 수
 }
 
 export function analyzeGraph(nodes: NetNode[], edges: NetEdge[]): GraphMetrics {
@@ -290,8 +296,34 @@ export function analyzeGraph(nodes: NetNode[], edges: NetEdge[]): GraphMetrics {
   const remap = new Map(orderC.map((c, i) => [c, i]));
   const finalC = community.map((c: number) => remap.get(c)!);
 
+  // Burt 구조 공백: 제약(constraint)·유효 크기(effective size) — networkx 와 같은 가중 정의
+  const pij = (i: number, j: number) => (str[i] ? (adj[i].get(j) ?? 0) / str[i] : 0);
+  const maxW = adj.map((m) => Math.max(0, ...m.values()));
+  const constraint = new Array(N).fill(0), effSize = new Array(N).fill(0);
+  for (let i = 0; i < N; i++) {
+    if (adj[i].size === 0) { constraint[i] = 0; effSize[i] = 0; continue; }
+    let c = 0, es = 0;
+    for (const j of adj[i].keys()) {
+      let sum = pij(i, j), red = 0;
+      for (const q of adj[i].keys()) if (q !== j) { sum += pij(i, q) * pij(q, j); red += pij(i, q) * (maxW[j] ? (adj[j].get(q) ?? 0) / maxW[j] : 0); }
+      c += sum * sum; es += 1 - red;
+    }
+    constraint[i] = c; effSize[i] = es;
+  }
+  // k-core: 차수가 k 미만인 노드를 계속 걷어내는 방식
+  const core = new Array(N).fill(0);
+  { const d = deg.slice(), removed = new Array(N).fill(false); let k = 0, left = N;
+    while (left > 0) {
+      let progressed = true;
+      while (progressed) { progressed = false;
+        for (let u = 0; u < N; u++) if (!removed[u] && d[u] <= k) { removed[u] = true; core[u] = k; left--; progressed = true; for (const v of adj[u].keys()) if (!removed[v]) d[v]--; } }
+      k++;
+    } }
+  const maxCore = N ? Math.max(...core) : 0;
+  const coreShells = Array.from({ length: maxCore + 1 }, (_, k) => ({ k, size: core.filter((c) => c >= k).length })).filter((x) => x.k > 0);
+
   const perNode = new Map<string, NodeMetrics>();
-  nodes.forEach((n, i) => perNode.set(n.id, { degree: deg[i], strength: str[i], betweenness: bet[i], closeness: clo[i], pagerank: pr[i], clustering: clus[i], community: finalC[i] }));
+  nodes.forEach((n, i) => perNode.set(n.id, { degree: deg[i], strength: str[i], betweenness: bet[i], closeness: clo[i], pagerank: pr[i], clustering: clus[i], community: finalC[i], constraint: constraint[i], effectiveSize: effSize[i], core: core[i] }));
   const communityList = orderC.map((_, ci) => {
     const members = nodes.map((n, i) => ({ n, i })).filter((x) => finalC[x.i] === ci).sort((a, b) => str[b.i] - str[a.i]);
     const ys = members.map((m) => m.n.yearMean).filter((y) => y > 0);
@@ -303,7 +335,7 @@ export function analyzeGraph(nodes: NetNode[], edges: NetEdge[]): GraphMetrics {
     nodeCount: N, edgeCount, density: possible ? edgeCount / possible : 0, avgDegree: N ? (2 * edgeCount) / N : 0,
     components: compSize.length, giantShare: N ? giant / N : 0,
     avgClustering: N ? clus.reduce((s, x) => s + x, 0) / N : 0, transitivity, modularity: Q, communities: orderC.length,
-    avgPath: pathCnt ? pathSum / pathCnt : 0, diameter, perNode, communityList,
+    avgPath: pathCnt ? pathSum / pathCnt : 0, diameter, perNode, communityList, maxCore, coreShells,
   };
 }
 

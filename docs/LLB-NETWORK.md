@@ -20,7 +20,7 @@
 | 이름 | 값 |
 |---|---|
 | `q` | 검색어(따옴표 구문 가능) |
-| `kind` | `coauthor` `coword` `authorkw` `journal` `institution` `country` `funder` `mesh` `concept` `citation` `coupling` |
+| `kind` | `coauthor` `coword` `authorkw` `journal` `institution` `country` `funder` `mesh` `concept` `citation` `coupling` `cocitation` |
 | `scope` | 40·100·200·500·1000·5000·10000 (최대 10,000) |
 | `sort` | `relevance` `cited` `fwci` `year` — 인용 네트워크는 `cited` 가 구조를 잘 보여 줌 |
 | `maxNodes` | 20–200(기본 120) |
@@ -36,3 +36,15 @@
 
 ## 시험 방법(웹앱 의존성 없이)
 `lib/literature/network-graph.ts` 는 순수 TypeScript 라 `node --experimental-strip-types` 로 바로 시험할 수 있다. 화면은 vite 로 `network-explorer.tsx` 만 묶어 서버 함수(`getNetwork`)를 감싼 작은 HTTP 서버와 함께 띄워 확인했다.
+
+## 보기(탭)
+| 탭 | 내용 | 계산 위치 |
+|---|---|---|
+| 네트워크 | 그래프 + 중심성 순위 + 군집 목록 | 화면(`analyzeGraph`, `layoutComponents`) |
+| 군집 요약 | 군집별 키워드·저널·국가·연도·인용 상위 논문 | 화면(`communityProfiles`, 서버가 준 `paperTable`·`nodePapers`) |
+| 구조 공백·브로커 | Burt 제약·유효 크기 순위 | 화면 |
+| k-core | 단계별 노드 수, 최대 core 구성원 | 화면 |
+| 최단 경로 | 두 노드 사이 최소 단계 경로 강조 | 화면(`shortestPath`) |
+| 시간 흐름 | 편수 비슷한 연도 구간별 그래프 | 서버(`timelineGraphs`) |
+| 신흥 주제 | 최근 3년 대 이전 점유율 증감 | 서버(`emergingTerms`) |
+| 네트워크 비교 | 두 검색어의 그래프·공통/고유 노드 | 두 번 호출 후 화면 |

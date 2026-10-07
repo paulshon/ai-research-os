@@ -4,8 +4,10 @@
 
 import { buildSearch, searchLlb, networkLlb } from "@/lib/literature/llb-search";
 import { buildGraph, summarize, type NetKind, type NetRecord, type Graph, type Summary } from "@/lib/literature/network-graph";
+import { buildCocitation, emergingTerms, nodeMembership, paperTable, timelineGraphs, ENTITY_LABEL, type EmergingResult, type PaperLite, type Period } from "@/lib/literature/network-analysis-extra";
 
 const DB = process.env.LLB_DB || "openalex";
+const SRC = process.env.LLB_SRC_DB || "openalex";
 export const MAX_SCOPE = 10000;          // 서버 메모리·응답 시간 안에서 안전한 최대 표본
 export const SCOPES = [40, 100, 200, 500, 1000, 5000, 10000];
 
@@ -109,27 +111,78 @@ async function sample(opts: any, scope: number): Promise<Sample> {
   return s;
 }
 
+/** 표본 논문들의 참고문헌 목록(papers_v2). 질의 항목이 128 KB 를 넘지 않게 1,000편씩 나눠 읽는다 */
+async function loadRefs(wids: number[]): Promise<Map<number, number[]>> {
+  const out = new Map<number, number[]>();
+  for (let i = 0; i < wids.length; i += 1000) {
+    const ids = wids.slice(i, i + 1000).map((w) => `'https://openalex.org/W${Math.trunc(Number(w))}'`);
+    const rows = await ch(
+      `SELECT id, referenced_works FROM ${SRC}.papers_v2 WHERE id IN (${ids.join(",")}) ORDER BY ingested_at DESC LIMIT 1 BY id FORMAT JSONEachRow`, {}, 110,
+    );
+    for (const r of rows) {
+      const w = Number(String(r.id).slice(String(r.id).lastIndexOf("W") + 1));
+      out.set(w, (Array.isArray(r.referenced_works) ? r.referenced_works : []).map((x: string) => Number(String(x).slice(String(x).lastIndexOf("W") + 1))).filter((n: number) => n > 0));
+    }
+  }
+  return out;
+}
+
+const lastName = (s: string) => { const t = String(s || "").trim(); if (!t) return ""; if (t.includes(",")) return t.split(",")[0].trim(); const p = t.split(/\s+/); return p[p.length - 1]; };
+
+async function cocitationGraph(records: NetRecord[], maxNodes: number): Promise<{ graph: Graph; note?: string }> {
+  const use = records.slice(0, 1500);
+  const refs = await loadRefs(use.map((r) => r.wid!).filter(Boolean));
+  const freq = new Map<number, number>();
+  for (const list of refs.values()) for (const w of new Set(list)) freq.set(w, (freq.get(w) ?? 0) + 1);
+  const top = [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 400).map(([w]) => w);
+  const labels = new Map<number, { label: string; year: number; cited: number }>();
+  for (let i = 0; i < top.length; i += 200) {
+    const rows = await ch(`SELECT wid, first_author, year, cited FROM ${DB}.lit_papers WHERE wid IN (${top.slice(i, i + 200).join(",")}) FORMAT JSONEachRow`, {}, 110);
+    for (const r of rows) labels.set(Number(r.wid), { label: `${lastName(r.first_author) || "W" + r.wid} ${Number(r.year) || ""}`.trim(), year: Number(r.year) || 0, cited: Number(r.cited) || 0 });
+  }
+  const graph = buildCocitation(refs, labels, { maxNodes });
+  return { graph, note: `공인용은 순위 상위 ${use.length}편의 참고문헌으로 계산했습니다(노드 = 함께 인용된 참고문헌; 표본 밖 논문은 이름이 W번호로 보일 수 있음).` };
+}
+
 export interface NetworkResult {
   kind: NetKind; scope: number; matched: number | null; matchedIsLowerBound: boolean; sampleSize: number; ms: number;
   graph: Graph; summary: Summary; note?: string;
 }
 
+export interface NetworkResult {
+  kind: NetKind; scope: number; matched: number | null; matchedIsLowerBound: boolean; sampleSize: number; ms: number;
+  graph: Graph; summary: Summary; note?: string;
+  timeline: Period[]; emerging: EmergingResult; entityLabel: string; paperTable: PaperLite[]; nodePapers: Record<string, number[]>;
+}
+
 export async function getNetwork(opts: any, kind: NetKind, scope: number, maxNodes = 120): Promise<NetworkResult> {
   const n = Math.min(MAX_SCOPE, Math.max(10, Math.trunc(scope) || 100));
   const s = await sample(opts, n);
+  const nodes = Math.min(200, Math.max(20, maxNodes));
   let extra: Parameters<typeof buildGraph>[3] = {};
   let note: string | undefined;
-  if (kind === "citation" || kind === "coupling") {
-    // 인용·서지결합은 원본 papers_v2 의 참고문헌 목록을 쓴다 — 상위 200편까지(쌍 비교 비용)
-    const wids = s.records.slice(0, 200).map((r) => r.wid!).filter(Boolean);
-    const net = await networkLlb(wids);
-    extra = {
-      citations: (net.citations ?? []).map((c: any) => ({ citing: Number(c.citing), cited: Number(c.cited) })),
-      coupling: (net.coupling ?? []).map((c: any) => ({ a: Number(c.a_wid), b: Number(c.b_wid), shared: Number(c.shared_refs) })),
-    };
-    if (s.records.length > 200) note = `인용·서지결합은 상위 200편으로 계산했습니다(표본 ${s.records.length}편 중).`;
+  let graph: Graph;
+  if (kind === "cocitation") {
+    const c = await cocitationGraph(s.records, nodes);
+    graph = c.graph; note = c.note;
+  } else {
+    if (kind === "citation" || kind === "coupling") {
+      // 인용·서지결합은 원본 papers_v2 의 참고문헌 목록을 쓴다 — 상위 200편까지(쌍 비교 비용)
+      const wids = s.records.slice(0, 200).map((r) => r.wid!).filter(Boolean);
+      const net = await networkLlb(wids);
+      extra = {
+        citations: (net.citations ?? []).map((c: any) => ({ citing: Number(c.citing), cited: Number(c.cited) })),
+        coupling: (net.coupling ?? []).map((c: any) => ({ a: Number(c.a_wid), b: Number(c.b_wid), shared: Number(c.shared_refs) })),
+      };
+      if (s.records.length > 200) note = `인용·서지결합은 상위 200편으로 계산했습니다(표본 ${s.records.length}편 중).`;
+    }
+    const records = kind === "citation" || kind === "coupling" ? s.records.slice(0, 200) : s.records;
+    graph = buildGraph(records, kind, { maxNodes: nodes }, extra);
   }
-  const records = kind === "citation" || kind === "coupling" ? s.records.slice(0, 200) : s.records;
-  const graph = buildGraph(records, kind, { maxNodes: Math.min(200, Math.max(20, maxNodes)) }, extra);
-  return { kind, scope: n, matched: s.matched, matchedIsLowerBound: s.lower, sampleSize: s.records.length, ms: s.ms, graph, summary: summarize(s.records), note };
+  const entityLabel = ENTITY_LABEL[kind] ?? ENTITY_LABEL.default;
+  return {
+    kind, scope: n, matched: s.matched, matchedIsLowerBound: s.lower, sampleSize: s.records.length, ms: s.ms, graph, summary: summarize(s.records), note,
+    timeline: timelineGraphs(s.records, kind, extra), emerging: emergingTerms(s.records, kind), entityLabel,
+    paperTable: paperTable(s.records, 300), nodePapers: nodeMembership(s.records, kind, graph.nodes.map((x) => x.id), 300),
+  };
 }
