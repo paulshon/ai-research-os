@@ -3,9 +3,7 @@
 import { useCallback, useState } from "react";
 import { useGemini } from "@/hooks/use-gemini";
 import NetworkExplorer from "@/components/literature/network-explorer";
-import LiteratureAnalyticsPanel, {
-  type GraphVisualStyle,
-} from "@/components/literature/literature-analytics-panel";
+import LlbDashboard from "@/components/literature/llb-dashboard";
 import LiteratureEngineTools from "@/components/literature/literature-engine-tools";
 import { useAppStore } from "@/store/app-store";
 import { LLB_STACK } from "@/lib/literature/llb-nav";
@@ -337,22 +335,11 @@ export function LlbNetworkPanel() {
 }
 
 export function LlbAnalyticsPanel() {
-  const { papers, q, setQ, loading, load } = useLlbWorkingSet();
-  const [visualStyle, setVisualStyle] = useState<GraphVisualStyle>("default");
+  // 검색에 일치한 논문 집합을 10개 영역(A~J)으로 분석한다: 동향·영향력·저널·저자·국가·주제 구조·재원·인용 구조·통계 모델·품질
   return (
     <div className="p-4 md:p-6 space-y-4">
       <h2 className="text-[22px] font-bold font-nanum-myeongjo">LLB 데이터분석</h2>
-      <div className="flex gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-[#13161e] border border-white/[0.06] text-white text-[14px]" />
-        <button type="button" onClick={load} className="px-4 py-2 rounded-lg bg-[#e8b84b]/20 text-[#e8b84b] border border-[#e8b84b]/30 text-[14px]">
-          {loading ? "…" : "코퍼스 로드"}
-        </button>
-      </div>
-      <LiteratureAnalyticsPanel
-        papers={papers}
-        visualStyle={visualStyle}
-        onVisualStyleChange={setVisualStyle}
-      />
+      <LlbDashboard initialQuery="artificial intelligence" />
     </div>
   );
 }

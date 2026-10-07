@@ -17,7 +17,7 @@ const quote = (x: unknown) => "'" + String(x).replace(/\\/g, "\\\\").replace(/'/
 const paramValue = (v: unknown) => (Array.isArray(v) ? "[" + v.map(quote).join(",") + "]" : esc(v));
 
 /** SQL 은 본문으로 보낸다(URL 길이 한도를 피함). 값은 param_* 로만 전달한다. */
-async function ch(sql: string, params: Record<string, unknown> = {}, timeoutS = 90): Promise<any[]> {
+export async function ch(sql: string, params: Record<string, unknown> = {}, timeoutS = 90): Promise<any[]> {
   const url = new URL(process.env.CLICKHOUSE_URL || "http://127.0.0.1:8123");
   url.searchParams.set("default_format", "JSONEachRow");
   url.searchParams.set("max_execution_time", String(Math.max(Number(process.env.LLB_TIMEOUT_S || 15), timeoutS)));
@@ -36,7 +36,7 @@ async function ch(sql: string, params: Record<string, unknown> = {}, timeoutS = 
 const noFormat = (sql: string) => sql.replace(/\s*FORMAT JSONEachRow\s*$/, "");
 
 /** 검색 순위(검색 화면과 같은 단계식 순위)로 상위 N편의 wid 를 가져온다. */
-async function topWids(opts: any, n: number): Promise<number[]> {
+export async function topWids(opts: any, n: number): Promise<number[]> {
   const s = buildSearch({ ...opts, limit: 200, offset: 0 });
   const take = async (sql: string, limitPattern: RegExp, limit: number) => {
     if (!limitPattern.test(sql)) throw new Error("검색 SQL 의 LIMIT 형식이 바뀌었습니다(llb-network.ts 확인 필요)");
@@ -112,7 +112,7 @@ async function sample(opts: any, scope: number): Promise<Sample> {
 }
 
 /** 표본 논문들의 참고문헌 목록(papers_v2). 질의 항목이 128 KB 를 넘지 않게 1,000편씩 나눠 읽는다 */
-async function loadRefs(wids: number[]): Promise<Map<number, number[]>> {
+export async function loadRefs(wids: number[]): Promise<Map<number, number[]>> {
   const out = new Map<number, number[]>();
   for (let i = 0; i < wids.length; i += 1000) {
     const ids = wids.slice(i, i + 1000).map((w) => `'https://openalex.org/W${Math.trunc(Number(w))}'`);

@@ -35,3 +35,16 @@
 - 서버 응답 확장: `timeline`(구간별 그래프), `emerging`, `paperTable`(대표 논문 300편), `nodePapers`(노드→논문), `entityLabel`. 공인용은 상위 1,500편의 참고문헌(papers_v2)에서 계산.
 - 새 파일: `lib/literature/network-analysis-extra.ts`. `network-graph.ts` 에 제약·유효 크기·k-core 지표 추가.
 - 시험: 타입 검사(strict) + 브라우저에서 모든 보기·설정·드래그·노드 클릭을 자동으로 눌러 예외 없음 확인.
+
+## 추가 (v3.2) — 데이터분석 대시보드 A~J
+- **`/llb/analytics`(데이터분석)를 10개 영역 대시보드로 교체**: A 규모·동향, B 영향력, C 저널·출판, D 저자·협력, E 기관·국가, F 주제·지식 구조(5개 분석), G 재원·오픈액세스, H 인용 구조, I 통계 모델, J 품질·검색 설계. 상세 `docs/LLB-DASHBOARD.md`.
+- **JCR 지표 범위 안내를 화면에 표시**: JCR 지표(JIF·사분위 등)는 학술지 논문의 약 31%에만 있고, 학술대회 논문·학위논문은 저널 지표 분석에서 빠진다. 대시보드 상단 안내, C·I 영역의 실제 보유 비율(유형별 막대 포함), 문서에 모두 표기.
+- **F 영역 정밀 분석**: 주제 흐름(스트림그래프), 주제 변천(군집 계통 샌키: 신규·소멸·분기·합류 판정), 학제성(Rao–Stirling, 분야 간·개념 간 히트맵), 토픽·초록 지도(TF-IDF → LSA → k-means, 2차원), 연구 공백 매트릭스(주제 × 방법·대상 사전, 관측/기대).
+- 새 파일: `lib/literature/llb-dashboard.ts`, `lib/literature/text-analytics.ts`(토큰화·TF-IDF·LSA·k-means·Rao–Stirling·OLS·로렌츠·주제 변천·주경로), `app/api/scholar/dashboard/route.ts`, `components/literature/viz.tsx`(차트 17종: 선·스트림·막대·히트맵·산점도·트리맵·선버스트·샌키·UpSet·타일 지도·코드·포레스트·로렌츠·상자·흐름도), `components/literature/llb-dashboard.tsx`.
+- 시험: 계산 부품은 합성 자료로 정답 확인(군집 순도 1.0, 회귀가 알려진 계수 복원, 주경로·주제 변천 판정), 14개 서버 분석은 실제 DB(1.74억 편)로 실행, 화면은 타입 검사(strict)와 브라우저 자동 조작으로 확인.
+
+## 추가 (v3.3) — 종단·횡단 분석, 시각화 확장
+- **K 종단 분석**(`section=longitudinal`): 성장 모형·3년 예측·변화점, 8개 지표 Mann–Kendall 추세 패널, 분야 CAGR, 저자 신규 유입·재참여, 주제 생애주기(점유율 기준), 코호트 인용 궤적·반감기.
+- **L 횡단 분석**(`section=cross&refYear=`): 기준 연도 한 해로 분야·유형·국가 비교, 교차표 χ², Welch t 검정(Cohen d), 분산분석 η², 상관·횡단 회귀.
+- **시각화 확장**(`viz2.tsx`): 도넛·롤리팝·레이더·범프·슬로프·와플·게이지·소형 다중 선·예측 밴드·사분면을 추가하고, 기존 영역에 적용(유형 도넛, 분야 범프, JCR 보유 와플, 저널 레이더, 인용 집중 게이지, 주제 순위 범프·점유율 슬로프, OA 도넛, Price 지수 게이지 등).
+- 새 파일: `lib/literature/panel-stats.ts`, `components/literature/viz2.tsx`, `components/literature/llb-dashboard-extra.tsx`. 선 그래프가 값 없는 해를 0 으로 그리던 문제 수정.
