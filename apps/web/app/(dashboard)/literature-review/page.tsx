@@ -1116,10 +1116,7 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
                   </div>
                 </>
               ) : loading ? (
-                <div className="text-center py-16">
-                  <div className="inline-block w-8 h-8 border-2 border-[#ec4899]/30 border-t-[#ec4899] rounded-full animate-spin mb-4" />
-                  <p className="text-white/30 text-[16px]">{t("litReview.analyzingGap")}</p>
-                </div>
+                <DonutLoader title={t("litReview.analyzingGap")} hint="AI 분석은 보통 10~30초 걸립니다." steps={[{ label: "논문 목록 전달", state: "done" }, { label: "AI 분석·정리", state: "active" }]} />
               ) : (
                 <div className="text-center py-20 text-white/15">
                   <p className="text-[43px] mb-3"><Icon name="💡" className="inline-flex align-[-0.125em] mr-1" size={15} /></p>
@@ -1143,10 +1140,7 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
                   </div>
                 </>
               ) : loading ? (
-                <div className="text-center py-16">
-                  <div className="inline-block w-8 h-8 border-2 border-[#4a6cf7]/30 border-t-[#4a6cf7] rounded-full animate-spin mb-4" />
-                  <p className="text-white/30 text-[16px]">{t("litReview.analyzingDesign")}</p>
-                </div>
+                <DonutLoader title={t("litReview.analyzingDesign")} hint="AI 분석은 보통 10~30초 걸립니다." steps={[{ label: "논문 목록 전달", state: "done" }, { label: "AI 분석·정리", state: "active" }]} />
               ) : (
                 <div className="text-center py-20 text-white/15">
                   <p className="text-[43px] mb-3"><Icon name="📐" className="inline-flex align-[-0.125em] mr-1" size={15} /></p>
@@ -1170,10 +1164,7 @@ Use clear headings and visual indicators. ${locale === "ko" ? "반드시 한국�
                   </div>
                 </>
               ) : loading ? (
-                <div className="text-center py-16">
-                  <div className="inline-block w-8 h-8 border-2 border-[#3ecfb2]/30 border-t-[#3ecfb2] rounded-full animate-spin mb-4" />
-                  <p className="text-white/30 text-[16px]">{t("litReview.analyzingCluster")}</p>
-                </div>
+                <DonutLoader title={t("litReview.analyzingCluster")} hint="AI 분석은 보통 10~30초 걸립니다." steps={[{ label: "논문 목록 전달", state: "done" }, { label: "AI 분석·정리", state: "active" }]} />
               ) : (
                 <div className="text-center py-20 text-white/15">
                   <p className="text-[43px] mb-3"><Icon name="🔬" className="inline-flex align-[-0.125em] mr-1" size={15} /></p>

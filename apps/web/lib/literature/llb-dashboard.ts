@@ -8,7 +8,7 @@ import { analyzeGraph, buildGraph, type NetRecord } from "@/lib/literature/netwo
 import {
   METHODS, OBJECTS, clusterTerms, correlation, kmeans, lorenz, lsa, mainPath, ols, pca2, raoStirling, thematicEvolution, tfidf, tokenize,
 } from "@/lib/literature/text-analytics";
-import { anova, cagr, changePoints, chi2Test, fitGrowth, lifecycle, mannKendall, welch } from "@/lib/literature/panel-stats";
+import { anova, autocorr1, cagr, changePoints, chi2Test, fitGrowth, hedgesCI, holm, holtForecast, kaplanMeier, kruskal, lifecycle, mannKendall, mannKendallTFPW, pettitt, welch } from "@/lib/literature/panel-stats";
 
 const DB = process.env.LLB_DB || "openalex";
 const T = `${DB}.lit_papers`;
@@ -365,8 +365,23 @@ async function longitudinal(sc: Scope) {
   const xs = use.map((r) => r.year), ys = use.map((r) => r.n);
   const growth = fitGrowth(xs, ys, 3).map((g) => ({ ...g, fitted: g.fitted.map((v) => Math.round(v * 10) / 10) }));
   const logCp = changePoints(ys.map((v) => Math.log(v + 1)), 3, 3).map((i) => xs[i]);
+  // 정밀화 ① 변화점 검정(Pettitt) ② 최근 3년을 감춘 예측 검증(홀드아웃) ③ Holt 지수평활 예측 ④ 전년 대비 증감률과 95% 구간 ⑤ 잔차 자기상관
+  const MODEL_KO_S: Record<string, string> = { linear: "선형", exponential: "지수", logistic: "로지스틱" };
+  const pet = pettitt(ys.map((v) => Math.log(v + 1))), petYear = pet.idx >= 0 ? xs[pet.idx + 1] : null;
+  const HOLD = 3, backtest: { model: string; mape: number; rmse: number }[] = [];
+  if (xs.length >= 10) {
+    const trX = xs.slice(0, -HOLD), trY = ys.slice(0, -HOLD), act = ys.slice(-HOLD);
+    const score = (model: string, pred: number[]) => backtest.push({ model, mape: pred.reduce((s2, v, i) => s2 + Math.abs(v - act[i]) / Math.max(1, act[i]), 0) / HOLD, rmse: Math.sqrt(pred.reduce((s2, v, i) => s2 + (v - act[i]) ** 2, 0) / HOLD) });
+    for (const f of fitGrowth(trX, trY, HOLD)) score(MODEL_KO_S[f.model] ?? f.model, f.forecast.map((v) => v.y));
+    const hb = holtForecast(trY, HOLD); if (hb) score("Holt 지수평활", hb.forecast.map((v) => v.y));
+    score("단순 지속(마지막 값 유지)", Array(HOLD).fill(trY[trY.length - 1]));
+    backtest.sort((a, b) => a.mape - b.mape);
+  }
+  const hl = holtForecast(ys, 3), holt = hl ? { alpha: hl.alpha, beta: hl.beta, phi: hl.phi, fitted: hl.fitted.map((v) => Math.round(v * 10) / 10), forecast: hl.forecast.map((f, i) => ({ x: xs[xs.length - 1] + i + 1, y: Math.round(f.y), lo: Math.round(f.lo), hi: Math.round(f.hi) })) } : null;
+  const yoy = ys.map((v, i) => { if (!i) return null; const r = v / Math.max(1, ys[i - 1]), se = Math.sqrt(1 / Math.max(1, v) + 1 / Math.max(1, ys[i - 1])); return { year: xs[i], n: v, yoy: r - 1, lo: Math.exp(Math.log(r) - 1.96 * se) - 1, hi: Math.exp(Math.log(r) + 1.96 * se) - 1 }; }).filter(Boolean);
+  const bestFit = growth[0], resid = bestFit ? ys.map((v, i) => v - bestFit.fitted[i]) : [], ac = autocorr1(resid);
   const metrics = ([["au", "평균 저자 수"], ["oa", "오픈액세스 비율"], ["intl", "국제 공동 비율"], ["refs", "평균 참고문헌 수"], ["jcr", "JCR 지표 보유 비율"], ["abs", "평균 초록 길이"], ["fu", "연구비 기록 비율"], ["kr", "한국 소속 비율"]] as const)
-    .map(([k, label]) => { const vals = use.map((r: any) => r[k] as number), mk = mannKendall(xs, vals), cps = changePoints(vals, 2, 4).map((i) => xs[i]); return { key: k, label, years: xs, values: vals, mk, changePoints: cps }; });
+    .map(([k, label]) => { const vals = use.map((r: any) => r[k] as number), mk = mannKendall(xs, vals), tf = mannKendallTFPW(xs, vals), pt = pettitt(vals), cps = changePoints(vals, 2, 4).map((i) => xs[i]); return { key: k, label, years: xs, values: vals, mk, tfpw: { p: tf.p, r1: tf.r1, adjusted: tf.adjusted, dir: tf.dir }, pettitt: { year: pt.idx >= 0 ? xs[pt.idx + 1] : null, p: pt.p }, changePoints: cps }; });
   // 주제 생애주기
   const byTopic = new Map<string, Map<number, number>>(); for (const r of topicRows) { const t = String(r.topic), m = byTopic.get(t) ?? new Map<number, number>(); byTopic.set(t, m); m.set(num(r.year), num(r.n)); }
   const lcYears = xs.slice(), yearN = new Map(ser.map((r) => [r.year, Math.max(1, r.n)]));
@@ -385,6 +400,17 @@ async function longitudinal(sc: Scope) {
     for (const y of yl) { active.set(y, (active.get(y) ?? 0) + 1); if (y <= maxY - 3 && (set.has(y + 1) || set.has(y + 2) || set.has(y + 3))) kept.set(y, (kept.get(y) ?? 0) + 1); }
   }
   const authors = xs.filter((y) => (active.get(y) ?? 0) >= 50).map((y) => ({ year: y, active: active.get(y) ?? 0, newShare: (first.get(y) ?? 0) / (active.get(y) ?? 1), retention: y <= maxY - 3 ? (kept.get(y) ?? 0) / (active.get(y) ?? 1) : null }));
+  // 저자 활동 지속(Kaplan–Meier): 처음 등장한 해로부터 몇 해째까지 계속 쓰는가. 마지막 논문이 최근 3년 이내면 중도절단
+  const kmGroups = (() => {
+    const cuts = [xs[0], xs[0] + Math.floor((fy1 - 6 - xs[0]) / 3), xs[0] + Math.floor(((fy1 - 6 - xs[0]) * 2) / 3), fy1 - 6], out: { label: string; curve: { t: number; s: number; atRisk: number }[]; n: number }[] = [];
+    if (fy1 - 6 - xs[0] < 6) return out;
+    for (let g = 0; g < 3; g++) {
+      const lo = cuts[g] + (g ? 1 : 0), hi = cuts[g + 1], dur: number[] = [], ev: boolean[] = [];
+      for (const r of auth) { const yl: number[] = (Array.isArray(r.ys) ? r.ys : []).map(Number).sort((a: number, b: number) => a - b); if (!yl.length) continue; const f0 = yl[0], l0 = yl[yl.length - 1]; if (f0 < lo || f0 > hi) continue; const exited = l0 <= fy1 - 3; dur.push(exited ? l0 - f0 : fy1 - f0); ev.push(exited); }
+      if (dur.length >= 50) out.push({ label: `${lo}–${hi}년 첫 등장`, curve: kaplanMeier(dur, ev, 12), n: dur.length });
+    }
+    return out;
+  })();
   // 코호트 인용 궤적과 반감기
   const cohorts = [...new Set<number>(aging.map((r) => num(r.year)))].sort((a, b) => a - b).map((y) => {
     const rs = aging.filter((r) => num(r.year) === y).sort((a, b) => num(a.age) - num(b.age)), pap = Math.max(1, ...rs.map((r) => num(r.papers)));
@@ -392,14 +418,14 @@ async function longitudinal(sc: Scope) {
     const peak = curve.reduce((b, c) => (c.annual > (b?.annual ?? -1) ? c : b), curve[0]), half = curve.find((c) => c.cum >= total / 2);
     return { year: y, curve, total, peakAge: peak?.age ?? 0, halfAge: half?.age ?? 0, papers: pap };
   });
-  return { series: ser, years: xs, counts: ys, growth, changePoints: logCp, metrics, topics, fields, authors, cohorts, authorSample: K > 1 ? K : 0 };
+  return { series: ser, years: xs, counts: ys, growth, changePoints: logCp, pettitt: { year: petYear, p: pet.p }, backtest, holdout: HOLD, holt, yoy, residual: { r1: ac.r1, dw: ac.dw }, survival: kmGroups, metrics, topics, fields, authors, cohorts, authorSample: K > 1 ? K : 0 };
 }
 
 // ───────────────────────── L. 횡단 분석(한 시점 비교) ─────────────────────────
 async function cross(sc: Scope, refYear: number) {
   const Y = Math.trunc(refYear), fl = (expr: string) => rows(sc, `SELECT ${expr} g, count() n, avg(log1p(cited)) m, stddevSamp(log1p(cited)) sd, quantile(0.5)(cited) med FROM $T WHERE $W AND year = ${Y} GROUP BY g FORMAT JSONEachRow`);
   const [byField, byType, byCountry, oaType, oaField, fOa, fFund, fIntl, fKr, fJcr, fTeam, corrRows, years] = await Promise.all([
-    rows(sc, `SELECT field g, count() n, avg(log1p(cited)) m, stddevSamp(log1p(cited)) sd, quantile(0.5)(cited) med, avgIf(fwci_oa, fwci_oa_known = 1) f, avg(is_oa) oa, countIf(length(arrayDistinct(countries)) > 1) / greatest(1, countIf(length(countries) > 0)) intl, avg(n_authors) au, countIf(has_jcr = 1) / count() jcr FROM $T WHERE $W AND year = ${Y} AND field != '' GROUP BY g HAVING n >= 20 ORDER BY n DESC LIMIT 20 FORMAT JSONEachRow`),
+    rows(sc, `SELECT field g, count() n, avg(log1p(cited)) m, stddevSamp(log1p(cited)) sd, quantile(0.5)(cited) med, quantile(0.25)(cited) q25, quantile(0.75)(cited) q75, quantile(0.9)(cited) q90, avgIf(fwci_oa, fwci_oa_known = 1) f, avg(is_oa) oa, countIf(length(arrayDistinct(countries)) > 1) / greatest(1, countIf(length(countries) > 0)) intl, avg(n_authors) au, countIf(has_jcr = 1) / count() jcr FROM $T WHERE $W AND year = ${Y} AND field != '' GROUP BY g HAVING n >= 20 ORDER BY n DESC LIMIT 20 FORMAT JSONEachRow`),
     rows(sc, `SELECT type g, count() n, avg(log1p(cited)) m, stddevSamp(log1p(cited)) sd, quantile(0.5)(cited) med, avgIf(fwci_oa, fwci_oa_known = 1) f, avg(is_oa) oa FROM $T WHERE $W AND year = ${Y} GROUP BY g HAVING n >= 10 ORDER BY n DESC FORMAT JSONEachRow`),
     rows(sc, `SELECT c g, count() n, avg(log1p(cited)) m, quantile(0.5)(cited) med, avgIf(fwci_oa, fwci_oa_known = 1) f FROM (SELECT arrayJoin(arrayDistinct(countries)) c, cited, fwci_oa, fwci_oa_known FROM $T WHERE $W AND year = ${Y}) GROUP BY g HAVING n >= 15 ORDER BY n DESC LIMIT 15 FORMAT JSONEachRow`),
     rows(sc, `SELECT type, oa_status s, count() n FROM $T WHERE $W AND year = ${Y} GROUP BY type, s FORMAT JSONEachRow`),
@@ -424,13 +450,24 @@ async function cross(sc: Scope, refYear: number) {
   const cn = ["피인용(로그)", "저자 수", "참고문헌 수", "초록 길이", "JIF", "OA", "국가 수", "지원"], keys = ["c", "a", "r", "l", "j", "o", "nc", "f"];
   const corr = corrRows.length > 100 ? correlation(keys.map((k) => corrRows.map((r) => num(r[k])))) : [];
   const reg = await model(sc, Y).catch(() => null);
+  // 정밀화: ① 다중비교 보정(Holm)·Hedges g 신뢰구간 ② 분산분석의 비모수 대응(Kruskal–Wallis, 표본) ③ 반복 횡단 — 해마다 같은 비교를 되풀이해 효과 크기의 추이를 본다(FWCI 로 논문 나이 보정)
+  const cmp = compare as any[], adj = holm(cmp.map((c) => c.p)); cmp.forEach((c, i) => { c.pAdj = adj[i]; const hg = hedgesCI(c.d, c.yes.n, c.no.n); c.g = hg.g; c.gCi = hg.ci; });
+  const nSum = byField.reduce((s2, r) => s2 + num(r.n), 0), kk = Math.max(1, Math.ceil(nSum / 40000)), topF = byField.slice(0, 8).map((r) => `'${String(r.g).replace(/'/g, "''")}'`).join(",");
+  const kwRaw = async (col: string, inList: string) => { if (!inList) return null; const rs = await rows(sc, `SELECT ${col} g, cited FROM $T WHERE $W AND year = ${Y} AND ${col} IN (${inList}) AND cityHash64(wid) % ${kk} = 0 LIMIT 60000 FORMAT JSONEachRow`).catch(() => []); const m = new Map<string, number[]>(); for (const r of rs) (m.get(String(r.g)) ?? m.set(String(r.g), []).get(String(r.g))!).push(num(r.cited)); const res = kruskal([...m.values()]); return { ...res, groups: m.size }; };
+  const topT = byType.filter((r) => num(r.n) >= 30).slice(0, 8).map((r) => `'${String(r.g).replace(/'/g, "''")}'`).join(",");
+  const [kwField, kwType] = await Promise.all([kwRaw("field", topF), kwRaw("type", topT)]);
+  const flagAgg = (nm: string, cond: string) => `countIf((${cond}) AND fwci_oa_known = 1) ${nm}n1, avgIf(log1p(fwci_oa), (${cond}) AND fwci_oa_known = 1) ${nm}m1, stddevSampIf(log1p(fwci_oa), (${cond}) AND fwci_oa_known = 1) ${nm}s1, countIf(NOT (${cond}) AND fwci_oa_known = 1) ${nm}n0, avgIf(log1p(fwci_oa), NOT (${cond}) AND fwci_oa_known = 1) ${nm}m0, stddevSampIf(log1p(fwci_oa), NOT (${cond}) AND fwci_oa_known = 1) ${nm}s0`;
+  const FL: [string, string, string][] = [["oa", "오픈액세스", "is_oa = 1"], ["intl", "국제 공동", "length(arrayDistinct(countries)) > 1"], ["fund", "연구비 기록", "length(funders) > 0"], ["team", "저자 6명 이상", "n_authors >= 6"]];
+  const effRows = await rows(sc, `SELECT year, count() n, quantile(0.5)(cited) med, avg(is_oa) oa, countIf(length(arrayDistinct(countries)) > 1) / count() intl, ${FL.map(([k, , c]) => flagAgg(k, c)).join(", ")} FROM $T WHERE $W AND year BETWEEN 2005 AND ${YEAR_NOW - 1} GROUP BY year ORDER BY year FORMAT JSONEachRow`).catch(() => []);
+  const effects = FL.map(([k, label]) => ({ key: k, label, points: effRows.map((r) => { const n1 = num(r[k + "n1"]), n0 = num(r[k + "n0"]); if (n1 < 20 || n0 < 20) return null; const w = welch({ n: n1, mean: num(r[k + "m1"]), sd: num(r[k + "s1"]) }, { n: n0, mean: num(r[k + "m0"]), sd: num(r[k + "s0"]) }), hg = hedgesCI(w.d, n1, n0); return { year: num(r.year), d: hg.g, lo: hg.ci[0], hi: hg.ci[1], n1, n0, p: w.p }; }).filter(Boolean) }));
+  const yearStats = effRows.map((r) => ({ year: num(r.year), n: num(r.n), med: num(r.med), oa: num(r.oa), intl: num(r.intl) }));
   return {
     refYear: Y, years: years.map((r) => ({ year: num(r.year), n: num(r.n) })).filter((r) => r.n >= 30).map((r) => r.year),
-    fields: byField.map((r) => ({ name: String(r.g), n: num(r.n), mean: num(r.m), med: num(r.med), f: num(r.f), oa: num(r.oa), intl: num(r.intl), au: num(r.au), jcr: num(r.jcr) })),
+    fields: byField.map((r) => ({ name: String(r.g), n: num(r.n), mean: num(r.m), med: num(r.med), q25: num(r.q25), q75: num(r.q75), q90: num(r.q90), f: num(r.f), oa: num(r.oa), intl: num(r.intl), au: num(r.au), jcr: num(r.jcr) })),
     types: byType.map((r) => ({ name: String(r.g), n: num(r.n), mean: num(r.m), med: num(r.med), f: num(r.f), oa: num(r.oa) })),
     countries: byCountry.map((r) => ({ name: String(r.g), n: num(r.n), med: num(r.med), f: num(r.f) })), compare, anova: { field: an, type: anType, nFields: fieldGroups.length },
     tabs: { typeOa: c1 ? { ...x1, chi2: c1.chi2, df: c1.df, p: c1.p, v: c1.v, resid: c1.resid } : null, fieldOa: c2 ? { ...t2, chi2: c2.chi2, df: c2.df, p: c2.p, v: c2.v, resid: c2.resid } : null },
-    corr: { names: cn, m: corr, n: corrRows.length }, regression: reg,
+    corr: { names: cn, m: corr, n: corrRows.length }, regression: reg, kw: { field: kwField, type: kwType, sampleEvery: kk }, effects, yearStats,
   };
 }
 

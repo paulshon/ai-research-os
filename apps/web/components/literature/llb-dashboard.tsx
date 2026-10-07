@@ -1,7 +1,7 @@
 "use client";
 
 /* ════════════════════════════════════════════════════════════
-   LLB 데이터 분석 대시보드 — A~J 10개 영역
+   LLB 데이터 분석 대시보드 — A~L 12개 영역
    A 규모·동향 · B 영향력 · C 저널·출판 · D 저자·협력 · E 기관·국가 · F 주제·지식 구조(5개 분석) · G 재원·오픈액세스 · H 인용 구조 · I 통계 모델 · J 품질·검색 설계
    서버(/api/scholar/dashboard)가 검색 조건에 일치한 논문 집합을 집계하고, 이 화면이 차트로 그린다.
 ═══════════════════════════════════════════════════════════════ */
@@ -11,6 +11,8 @@ import {
   BarsH, BoxRows, Card, Chord, Columns, Empty, Flow, Forest, Heatmap, LineChart, Lorenz, Notice, PAL, Sankey, Scatter, Spark, StackedBars, Stream, Sunburst, TileMap, Treemap, UpSet, nfmt,
 } from "@/components/literature/viz";
 import { Donut, Gauge, Lollipop } from "@/components/literature/viz2";
+import { PALETTES } from "@/lib/literature/viz-style";
+import DonutLoader from "@/components/literature/donut-loader";
 import { ClusterRadar, CoverageWaffle, Cross, FieldBump, ImpactGauges, JournalRadar, Longi, OaDonut, TopicBump, TopicSlope, TypeDonut } from "@/components/literature/llb-dashboard-extra";
 
 type Sec = "trend" | "impact" | "journal" | "author" | "geo" | "topic_year" | "topic_evo" | "topic_rs" | "topic_map" | "topic_gap" | "funding" | "citation" | "model" | "quality" | "longitudinal" | "cross";
@@ -43,6 +45,9 @@ const SECTION_HELP: Record<Sec, string> = {
   cross: "선택한 기준 연도 한 해의 논문만으로 분야·유형·국가를 비교하고 교차표(χ²)·Welch t 검정·분산분석·횡단 회귀를 계산합니다.",
 };
 const YEAR_NOW = 2026;
+/** 한 번에 분석할 때의 호출 순서(가벼운 것 먼저, 텍스트·인용망 같은 무거운 것은 뒤) */
+const SEC_LABEL: Record<string, string> = { trend: "A 규모·동향", impact: "B 영향력", journal: "C 저널·출판", author: "D 저자·협력", geo: "E 기관·국가", funding: "G 재원·OA", quality: "J 품질·검색 설계", longitudinal: "K 종단 분석", cross: "L 횡단 분석", model: "I 통계 모델", topic_year: "F 주제 흐름", topic_evo: "F 주제 변천", topic_rs: "F 학제성", topic_map: "F 토픽·초록 지도", topic_gap: "F 연구 공백", citation: "H 인용 구조" };
+const ALL_SECS: Sec[] = ["trend", "impact", "journal", "author", "geo", "funding", "quality", "longitudinal", "cross", "model", "topic_year", "topic_evo", "topic_rs", "topic_map", "topic_gap", "citation"];
 const nf = new Intl.NumberFormat("ko-KR");
 const pct = (a: number, b: number) => (b ? (a / b) * 100 : 0);
 const topKeys = (m: Map<string, number>, k: number) => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, k).map(([x]) => x);
@@ -57,13 +62,21 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
   const [err, setErr] = useState("");
   const [elapsed, setElapsed] = useState(0);
   const [refYear, setRefYear] = useState(2024);
+  const [mode, setMode] = useState<"single" | "all">("single");
+  const [runId, setRunId] = useState(0);
+  const [palId, setPalId] = useState("pastel");
+  const [errs, setErrs] = useState<Record<string, string>>({});
+  const pending = useRef(new Map<string, Promise<Resp>>());
+  const storeRef = useRef(store);
+  storeRef.current = store;
   const inflight = useRef(new Set<string>());
   const regionNames = useMemo(() => { try { return new Intl.DisplayNames(["ko"], { type: "region" }); } catch { return null; } }, []);
   const cname = useCallback((c: string) => { try { return regionNames?.of(c) ?? c; } catch { return c; } }, [regionNames]);
 
   const g = GROUPS.find((x) => x.id === group)!;
   const sec: Sec = g.sec ?? sub;
-  const key = committed ? `${committed}|${sec}|${sec === "cross" ? refYear : ""}|${extraParams}` : "";
+  const keyOf = (x: Sec) => `${committed}|${x}|${x === "cross" ? refYear : ""}|${extraParams}`;
+  const key = committed && mode === "single" ? keyOf(sec) : "";
   const cur = key ? store[key] : undefined;
 
   useEffect(() => {
@@ -77,8 +90,52 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
     return () => clearInterval(tick);
   }, [committed, key, sec, endpoint, extraParams, store]);
 
+  // 한 번에 분석: 모든 영역을 두 개씩 차례로 불러온다(같은 검색의 결과는 서버가 5분 캐시)
+  useEffect(() => {
+    if (mode !== "all" || !committed) return;
+    let stop = false; const HEAVY = new Set<Sec>(["topic_evo", "topic_rs", "topic_map", "citation"]), retried = new Set<Sec>(), queue = ALL_SECS.filter((x) => !storeRef.current[keyOf(x)] && !HEAVY.has(x)), heavy = ALL_SECS.filter((x) => !storeRef.current[keyOf(x)] && HEAVY.has(x));
+    const worker = async () => {
+      while (!stop) {
+        const x = queue.shift(); if (!x) return; const k = keyOf(x); setLoading(k);
+        try {
+          let pr = pending.current.get(k);   // 같은 영역을 두 번 요청하지 않는다(재실행·빠른 전환 시 서버 과부하 방지)
+          if (!pr) { pr = fetch(`${endpoint}?q=${encodeURIComponent(committed)}&section=${x}${x === "cross" ? `&refYear=${refYear}` : ""}${extraParams}`).then(async (r) => { const j = (await r.json()) as Resp; if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`); return j; }); pending.current.set(k, pr); const kk = k; void pr.then(() => pending.current.delete(kk), () => pending.current.delete(kk)); }
+          const d = await pr;
+          if (!stop) { setStore((st) => ({ ...st, [k]: d })); setErrs((e) => { const n = { ...e }; delete n[x]; return n; }); }
+        } catch (e) { const msg = String((e as Error)?.message ?? e); if (!stop && /Timeout|TIMEOUT|HTTP 5/.test(msg) && !retried.has(x)) { retried.add(x); queue.push(x); } else if (!stop) setErrs((er) => ({ ...er, [x]: msg })); }
+      }
+    };
+    // 가벼운 영역은 둘씩, 텍스트·인용망처럼 무거운 영역은 그 뒤에 하나씩(서버·DB 과부하로 시간 초과가 나는 것을 막는다)
+    void Promise.all([worker(), worker()]).then(() => { queue.push(...heavy); return worker(); }).then(() => { if (!stop) setLoading(""); });
+    return () => { stop = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, committed, runId, refYear, endpoint, extraParams]);
+
+  const applyPalette = (id: string) => { const c = PALETTES.find((x) => x.id === id)?.colors ?? PALETTES[0].colors; PAL.splice(0, PAL.length, ...c, ...PALETTES[0].colors.slice(0, Math.max(0, 12 - c.length))); setPalId(id); };
+  const doneN = ALL_SECS.filter((x) => store[keyOf(x)]).length;
   const D = cur?.data;
-  const run = () => { if (q.trim()) { setStore({}); setCommitted(q.trim()); } };
+  const run = () => { if (q.trim()) { setStore({}); setErrs({}); setRunId((n) => n + 1); setCommitted(q.trim()); } };
+
+  const renderSec = (x: Sec, Dx: any) => (
+    <>
+      {x === "trend" && <Trend D={Dx} />}
+      {x === "impact" && <Impact D={Dx} />}
+      {x === "journal" && <Journal D={Dx} />}
+      {x === "author" && <Author D={Dx} />}
+      {x === "geo" && <Geo D={Dx} cname={cname} />}
+      {x === "topic_year" && <TopicYear D={Dx} />}
+      {x === "topic_evo" && <TopicEvo D={Dx} />}
+      {x === "topic_rs" && <TopicRs D={Dx} />}
+      {x === "topic_map" && <TopicMap D={Dx} />}
+      {x === "topic_gap" && <TopicGap D={Dx} />}
+      {x === "funding" && <Funding D={Dx} />}
+      {x === "citation" && <Citation D={Dx} />}
+      {x === "model" && <Model D={Dx} />}
+      {x === "quality" && <Quality D={Dx} />}
+      {x === "longitudinal" && <Longi D={Dx} />}
+      {x === "cross" && <Cross D={Dx} refYear={refYear} setRefYear={setRefYear} />}
+    </>
+  );
 
   return (
     <div className="max-w-6xl space-y-4">
@@ -86,6 +143,11 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
         <div className="flex gap-2">
           <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") run(); }} placeholder={'검색어 (예: machine learning cancer, "deep learning", 우울 청소년)'} className="flex-1 px-3 py-2 rounded-lg bg-[#0d0f14] border border-white/[0.06] text-white text-[14px]" />
           <button type="button" onClick={run} className="px-4 py-2 rounded-lg bg-[#e8b84b]/20 text-[#e8b84b] border border-[#e8b84b]/30 text-[14px]">{loading ? "분석 중…" : "분석 실행"}</button>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/45">
+          <span className="flex gap-1">{([["single", "영역별 보기"], ["all", "A~L 한 번에 보기"]] as const).map(([id, label]) => <button key={id} type="button" onClick={() => setMode(id)} className={`px-3 py-1 rounded-lg border ${mode === id ? "border-[#e8b84b]/50 bg-[#e8b84b]/15 text-[#e8c97a] font-medium" : "border-white/[0.06] hover:text-white/75"}`}>{label}</button>)}</span>
+          <label className="flex items-center gap-1.5">차트 색상 모드 <select value={palId} onChange={(e) => applyPalette(e.target.value)} className="bg-[#0d0f14] border border-white/[0.08] rounded px-1.5 py-0.5 text-white/80">{PALETTES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select><span className="flex">{PAL.slice(0, 6).map((c, i) => <i key={i} className="inline-block w-2.5 h-2.5" style={{ background: c }} />)}</span></label>
+          <span className="text-white/30">각 차트 오른쪽 위 PNG·JPG 단추로 이미지 저장 · 차트 아래 ‘해석 도움말’에서 쉬운 해석·학술적 해석</span>
         </div>
         <Notice tone="warn"><b>JCR 지표 안내</b> — JIF·사분위 등 JCR 지표는 <b>학술지 논문의 약 31%에만</b> 있습니다. 값이 있는 논문까지만 저널 지표 분석에 쓰이며, <b>학술대회 논문·학위논문은 저널 지표 분석에서 빠집니다</b>(해당 분석 화면에 실제 비율을 표시합니다).</Notice>
         <div className="flex flex-wrap gap-1.5">{GROUPS.map((x) => (
@@ -97,27 +159,37 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
         {err && <p className="text-[13px] text-[#f87171]">오류: {err}</p>}
       </div>
 
-      {!committed && <p className="text-center py-16 text-white/20 text-[15px]">검색어를 넣고 ‘분석 실행’을 누르면 일치한 논문 집합을 10개 영역으로 분석합니다.</p>}
-      {committed && !cur && <p className="text-center py-16 text-white/40 text-[15px]">계산 중… {elapsed ? `${elapsed}초` : ""} <span className="text-white/20">(큰 집합·텍스트 분석은 1분 안팎)</span></p>}
+      {!committed && <p className="text-center py-16 text-white/20 text-[15px]">검색어를 넣고 ‘분석 실행’을 누르면 일치한 논문 집합을 12개 영역으로 분석합니다.</p>}
+      {committed && mode === "single" && !cur && !err && <DonutLoader title={`${g.label} 분석 중`} hint="큰 집합·텍스트·인용 분석은 1분 안팎 걸립니다. 같은 검색의 결과는 5분간 캐시됩니다." steps={[{ label: "검색 일치 집합 확정", state: "done" }, { label: "SQL 집계·통계 계산", state: "active" }, { label: "차트 구성", state: "pending" }]} />}
 
-      {cur && D && (
-        <div className="grid md:grid-cols-2 gap-4">
-          {sec === "trend" && <Trend D={D} />}
-          {sec === "impact" && <Impact D={D} />}
-          {sec === "journal" && <Journal D={D} />}
-          {sec === "author" && <Author D={D} />}
-          {sec === "geo" && <Geo D={D} cname={cname} />}
-          {sec === "topic_year" && <TopicYear D={D} />}
-          {sec === "topic_evo" && <TopicEvo D={D} />}
-          {sec === "topic_rs" && <TopicRs D={D} />}
-          {sec === "topic_map" && <TopicMap D={D} />}
-          {sec === "topic_gap" && <TopicGap D={D} />}
-          {sec === "funding" && <Funding D={D} />}
-          {sec === "citation" && <Citation D={D} />}
-          {sec === "model" && <Model D={D} />}
-          {sec === "quality" && <Quality D={D} />}
-          {sec === "longitudinal" && <Longi D={D} />}
-          {sec === "cross" && <Cross D={D} refYear={refYear} setRefYear={setRefYear} />}
+      {mode === "single" && cur && D && (
+        <div key={palId} className="grid md:grid-cols-2 gap-4">{renderSec(sec, D)}</div>
+      )}
+      {mode === "all" && committed && (
+        <div key={palId} className="space-y-8">
+          {doneN < ALL_SECS.length && <DonutLoader title="A~L 전체 분석 중" hint="영역마다 차례로 계산해 끝나는 대로 아래에 채워집니다(전체 3~5분)." steps={ALL_SECS.map((x) => ({ label: SEC_LABEL[x] ?? x, state: store[keyOf(x)] ? "done" as const : errs[x] ? "done" as const : (loading === keyOf(x) || ALL_SECS.findIndex((y) => !store[keyOf(y)] && !errs[y]) === ALL_SECS.indexOf(x)) ? "active" as const : "pending" as const }))} />}
+          <div className="p-3 rounded-xl bg-[#13161e] border border-white/[0.05] text-[13px] text-white/60 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span>전체 분석 진행 <b className="text-white/85">{doneN}</b> / {ALL_SECS.length} 영역{loading ? ` · 계산 중 ${elapsed ? elapsed + "초" : ""}` : doneN === ALL_SECS.length ? " · 완료" : ""}</span>
+            <span className="flex flex-wrap gap-1">{GROUPS.map((x) => <a key={x.id} href={`#llb-${x.id}`} className="px-2 py-0.5 rounded-md border border-white/[0.08] hover:text-white/90">{x.id}</a>)}</span>
+            {Object.keys(errs).length > 0 && <span className="text-[#f87171]">오류: {Object.entries(errs).map(([k, v]) => `${k}: ${v}`).join(" · ")}</span>}
+          </div>
+          {GROUPS.map((x) => {
+            const parts: Sec[] = x.sec ? [x.sec] : (x.subs ?? []).map((u) => u.id);
+            return (
+              <section key={x.id} id={`llb-${x.id}`} className="space-y-3 scroll-mt-4">
+                <h2 className="text-[17px] font-semibold text-[#7fd0c6] border-b border-white/[0.06] pb-1.5">{x.label} <span className="text-[12.5px] font-normal text-white/35">{x.desc}</span></h2>
+                {parts.map((ps) => {
+                  const r = store[keyOf(ps)];
+                  return (
+                    <div key={ps} className="space-y-2">
+                      {x.subs && <h3 className="text-[14px] text-[#f0a070]">{x.subs.find((u) => u.id === ps)?.label}</h3>}
+                      {r?.data ? <div className="grid md:grid-cols-2 gap-4">{renderSec(ps, r.data)}</div> : <p className="py-6 text-center text-white/30 text-[14px]">{errs[ps] ? `오류: ${errs[ps]}` : <DonutLoader compact size={52} title="계산 중" steps={[{ label: "집계·통계 계산", state: "active" }]} />}</p>}
+                    </div>
+                  );
+                })}
+              </section>
+            );
+          })}
         </div>
       )}
     </div>

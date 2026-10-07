@@ -4,7 +4,7 @@
    LLB 데이터 분석 — 추가 차트 부품(도넛·롤리팝·레이더·범프·슬로프·와플·게이지·소형 다중 선·예측 밴드·사분면)
 ═══════════════════════════════════════════════════════════════ */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PAL, Empty, nfmt } from "@/components/literature/viz";
 
 const AX = "rgba(255,255,255,0.35)", GRID = "rgba(255,255,255,0.07)";
@@ -34,16 +34,18 @@ export function Donut({ items, size = 230, unit = "편", center }: { items: { la
 
 /** 롤리팝: 순위(막대보다 가볍게) */
 export function Lollipop({ items, fmt = nfmt, color = "#4fa89f", labelW = 170 }: { items: { label: string; value: number; sub?: string; color?: string }[]; fmt?: (n: number) => string; color?: string; labelW?: number }) {
+  const wrap = useRef<HTMLDivElement>(null), [W, setW] = useState(640);
+  // 실제 폭을 재서 그린다: viewBox 를 늘려 쓰면 넓은 카드에서 글자가 커져 버린다
+  useEffect(() => { const el = wrap.current; if (!el) return; const ro = new ResizeObserver(() => setW(Math.max(320, Math.round(el.clientWidth)))); ro.observe(el); setW(Math.max(320, Math.round(el.clientWidth))); return () => ro.disconnect(); }, []);
   if (!items.length) return <Empty />;
-  const W = 640, rh = 24, P = { l: labelW, r: 90, t: 4, b: 4 }, H = P.t + P.b + items.length * rh, mx = Math.max(1e-9, ...items.map((i) => Math.abs(i.value)));
-  const X = (v: number) => P.l + (Math.abs(v) / mx) * (W - P.l - P.r);
-  return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-    <defs><linearGradient id="lolg" x1="0" x2="1"><stop offset="0" stopColor={color} stopOpacity="0.25" /><stop offset="1" stopColor={color} stopOpacity="0.9" /></linearGradient></defs>
+  const lw = Math.min(labelW, Math.round(W * 0.45)), rh = 20, P = { l: lw, r: items.some((i) => i.sub) ? 150 : 70, t: 2, b: 2 }, H = P.t + P.b + items.length * rh, mx = Math.max(1e-9, ...items.map((i) => Math.abs(i.value)));
+  const X = (v: number) => P.l + 8 + (Math.abs(v) / mx) * (W - P.l - P.r - 8);
+  return <div ref={wrap} className="w-full"><svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block">
     {items.map((it, i) => { const y = P.t + i * rh + rh / 2, c = it.color ?? color; return <g key={i}>
-      <text x={P.l - 8} y={y + 4} textAnchor="end" fontSize={11.5} fill="#fff" fillOpacity={0.78}>{short(it.label, Math.floor(labelW / 6.2))}</text>
-      <line x1={P.l} x2={X(it.value)} y1={y} y2={y} stroke={c} strokeOpacity={0.55} strokeWidth={2} strokeLinecap="round" /><circle cx={X(it.value)} cy={y} r={5.5} fill={c} fillOpacity={0.95}><title>{it.label}: {fmt(it.value)}{it.sub ? " · " + it.sub : ""}</title></circle>
-      <text x={X(it.value) + 10} y={y + 4} fontSize={11} fill="#fff" fillOpacity={0.62} className="tabular-nums">{fmt(it.value)}{it.sub ? <tspan fill="#fff" fillOpacity={0.3}> · {short(it.sub, 14)}</tspan> : null}</text></g>; })}
-  </svg>;
+      <text x={P.l - 6} y={y + 3.5} textAnchor="end" fontSize={10.5} fill="#fff" fillOpacity={0.78}>{short(it.label, Math.floor((lw - 8) / 6.4))}</text>
+      <line x1={P.l + 8} x2={X(it.value)} y1={y} y2={y} stroke={c} strokeOpacity={0.55} strokeWidth={1.6} strokeLinecap="round" /><circle cx={X(it.value)} cy={y} r={4.2} fill={c} fillOpacity={0.95}><title>{it.label}: {fmt(it.value)}{it.sub ? " · " + it.sub : ""}</title></circle>
+      <text x={X(it.value) + 8} y={y + 3.5} fontSize={10} fill="#fff" fillOpacity={0.62} className="tabular-nums">{fmt(it.value)}{it.sub ? <tspan fill="#fff" fillOpacity={0.35}> · {short(it.sub, 16)}</tspan> : null}</text></g>; })}
+  </svg></div>;
 }
 
 /** 레이더: 여러 지표를 한눈에 비교(각 축은 0~1 로 정규화된 값을 받는다) */

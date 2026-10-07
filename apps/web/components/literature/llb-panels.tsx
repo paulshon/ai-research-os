@@ -357,6 +357,7 @@ export function LlbInsightsPanel() {
           {loading ? "…" : "코퍼스 로드"}
         </button>
       </div>
+      {loading && <DonutLoader title="코퍼스 불러오는 중" hint="로컬 문헌 40편을 가져옵니다." steps={[{ label: "로컬 문헌 검색", state: "active" }, { label: "코퍼스 구성", state: "pending" }]} />}
       <LiteratureEngineTools
         papers={papers}
         locale="ko"
@@ -406,6 +407,7 @@ function LlbGeminiPanel({
           {aiLoading ? "분석 중…" : "LLB 분석 실행"}
         </button>
       </div>
+      {(loading || aiLoading) && <DonutLoader title={aiLoading ? "LLB 분석 중" : "코퍼스 불러오는 중"} hint="AI 해석은 보통 10~30초 걸립니다." steps={[{ label: "로컬 문헌 검색", state: loading ? "active" : "done" }, { label: "AI 분석·정리", state: aiLoading ? "active" : "pending" }]} />}
       <pre className="whitespace-pre-wrap text-[14px] text-white/65 bg-[#13161e] border border-white/[0.04] rounded-xl p-4 min-h-[240px]">
         {out || "코퍼스를 로드한 뒤 분석을 실행하세요."}
       </pre>

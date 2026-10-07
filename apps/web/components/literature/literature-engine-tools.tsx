@@ -1,5 +1,7 @@
 "use client";
 
+import DonutLoader from "@/components/literature/donut-loader";
+
 import { useState } from "react";
 import { MaterialSymbol } from "@/components/literature/material-symbol";
 import { useGemini } from "@/hooks/use-gemini";
@@ -187,7 +189,7 @@ export default function LiteratureEngineTools({
       )}
 
       {loading && (
-        <p className="text-[14px] text-[#e8b84b] animate-pulse">Gemini 분석 중...</p>
+        <DonutLoader compact title="AI 분석 중" hint="보통 10~30초 걸립니다." steps={[{ label: "논문 목록 전달", state: "done" }, { label: "AI 분석·정리", state: "active" }]} />
       )}
 
       {cards.length > 0 && active === "cards" && (

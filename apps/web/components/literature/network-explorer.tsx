@@ -8,7 +8,13 @@
    - 서버(/api/scholar/network)가 표본을 모아 노드·엣지·구간별 그래프·급증 항목을 만들고, 이 화면이 지표·군집·배치를 계산한다
 ═══════════════════════════════════════════════════════════════ */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { BGS, DEFAULT_STYLE, PALETTES, bgOf, paletteColors, type EdgeColorMode, type VizStyle } from "@/lib/literature/viz-style";
+import { exportSvgElement } from "@/lib/literature/export-image";
+import { NetGuide } from "@/components/literature/guide-box";
+import DonutLoader from "@/components/literature/donut-loader";
+
+const StyleCtx = createContext<VizStyle>(DEFAULT_STYLE);
 import {
   NET_KINDS, analyzeGraph, layoutComponents,
   type Graph, type GraphMetrics, type NetEdge, type NetKind, type NetNode, type NodeKind, type Placed, type Summary,
@@ -92,23 +98,6 @@ function labelOf(n: { label: string; kind: NodeKind }, rn: Intl.DisplayNames | n
   return n.label;
 }
 
-async function exportSvgAs(svg: SVGSVGElement, format: "png" | "jpeg" | "svg", filename: string, w = W, h = H) {
-  const clone = svg.cloneNode(true) as SVGSVGElement;
-  clone.setAttribute("viewBox", `0 0 ${w} ${h}`); clone.setAttribute("width", String(w * 2)); clone.setAttribute("height", String(h * 2));
-  let xml = new XMLSerializer().serializeToString(clone);
-  if (!xml.includes("xmlns=")) xml = xml.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
-  const download = (href: string) => { const a = document.createElement("a"); a.href = href; a.download = filename; a.click(); };
-  if (format === "svg") { const u = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml" })); download(u); setTimeout(() => URL.revokeObjectURL(u), 2000); return; }
-  const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml;charset=utf-8" }));
-  try {
-    const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
-    const c = document.createElement("canvas"); c.width = w * 2; c.height = h * 2;
-    const ctx = c.getContext("2d"); if (!ctx) return;
-    ctx.fillStyle = BG; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0);
-    download(c.toDataURL(format === "jpeg" ? "image/jpeg" : "image/png", 0.93));
-  } finally { URL.revokeObjectURL(url); }
-}
-
 /** 그래프 그리기: 청록 바탕·단색 노드·흰 직선 엣지. 확대/이동·호버/선택 강조·경로 강조를 지원한다. */
 function GraphCanvas({
   prep, colorOf, shapeMode, labelN, focus, selected, onHover, onSelect, path, edgeColor = "#ffffff", w = W, h = H, svgRef, regionNames, maxHeight = 640,
@@ -117,6 +106,7 @@ function GraphCanvas({
   onHover: (id: string | null) => void; onSelect: (id: string | null) => void; path?: string[] | null; edgeColor?: string; w?: number; h?: number;
   svgRef?: React.RefObject<SVGSVGElement | null>; regionNames: Intl.DisplayNames | null; maxHeight?: number;
 }) {
+  const vs = useContext(StyleCtx), B = bgOf(vs.bg), BG = B.bg, PILL = B.pill;
   const [view, setView] = useState({ k: 1, x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null);
   useEffect(() => { setView({ k: 1, x: 0, y: 0 }); }, [prep]);
@@ -161,8 +151,8 @@ function GraphCanvas({
         const key = e.source < e.target ? `${e.source}\u0000${e.target}` : `${e.target}\u0000${e.source}`;
         const onPath = pathEdges.has(key), hot = !!focus && (focus === e.source || focus === e.target);
         const dim = (!!focus && !hot) || (pathNodes.size > 0 && !onPath);
-        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={onPath ? "#ffd24a" : edgeColor} strokeLinecap="round"
-          strokeOpacity={dim ? 0.1 : onPath || hot ? 1 : Math.min(0.95, 0.55 + e.weight * 0.08)} strokeWidth={(onPath ? 3.6 : hot ? 2.4 : Math.min(2.8, 1.1 + Math.log2(1 + e.weight) * 0.45))}
+        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={onPath ? "#ffd24a" : vs.edgeColor === "theme" ? B.edge : vs.edgeColor === "gold" ? "#e8b84b" : vs.edgeColor === "gray" ? "#8b95a3" : colorOf(prep.nodes.find((n) => n.id === e.source)!)} strokeLinecap="round"
+          strokeOpacity={dim ? 0.1 : onPath || hot ? 1 : Math.min(0.95, (0.55 + e.weight * 0.08) * vs.edgeOpacity)} strokeWidth={(onPath ? 3.6 : hot ? 2.4 : Math.min(2.8, 1.1 + Math.log2(1 + e.weight) * 0.45)) * vs.edgeWidth}
           markerEnd={prep.directed ? "url(#arrowhead)" : undefined} />;
       })}
       {[...prep.nodes].sort((a, b) => prep.val(a, "strength") - prep.val(b, "strength")).map((n) => {
@@ -173,11 +163,11 @@ function GraphCanvas({
         const show = labelSet.has(n.id) || isF || inPath || (isNb && focus === selected);
         return (
           <g key={n.id} opacity={dim ? 0.2 : 1} style={{ cursor: "pointer" }} onMouseEnter={() => onHover(n.id)} onMouseLeave={() => onHover(null)} onClick={(e) => { e.stopPropagation(); onSelect(selected === n.id ? null : n.id); }}>
-            <path d={shapePath(n.kind, p.x, p.y, p.r, shapeMode)} fill={c} stroke={isF || inPath ? "#ffffff" : "none"} strokeWidth={isF || inPath ? 2.5 : 0} />
+            <path d={shapePath(n.kind, p.x, p.y, p.r * vs.nodeScale, shapeMode)} fill={c} stroke={isF || inPath ? "#ffffff" : "none"} strokeWidth={isF || inPath ? 2.5 : 0} />
             {show && (
               <g pointerEvents="none">
-                <rect x={p.x - txt.length * 3.3 - 4} y={p.y + p.r + 3} width={txt.length * 6.6 + 8} height={15} rx={7.5} fill={PILL} fillOpacity={0.9} />
-                <text x={p.x} y={p.y + p.r + 14} textAnchor="middle" fontSize={10.5} fill="#ffffff">{txt}</text>
+                <rect x={p.x - (txt.length * 6.6 * vs.labelSize / 10.5 + 8) / 2} y={p.y + p.r * vs.nodeScale + 3} width={txt.length * 6.6 * vs.labelSize / 10.5 + 8} height={vs.labelSize + 5} rx={(vs.labelSize + 5) / 2} fill={PILL} fillOpacity={0.9} />
+                <text x={p.x} y={p.y + p.r * vs.nodeScale + 3 + vs.labelSize + 0.5} textAnchor="middle" fontSize={vs.labelSize} fill={B.text}>{txt}</text>
               </g>
             )}
           </g>
@@ -219,7 +209,12 @@ function narrative(res: NetworkResponse, m: GraphMetrics, top: { label: string }
   return lines.join("\n\n");
 }
 
-export default function NetworkExplorer({ initialQuery = "artificial intelligence", endpoint = "/api/scholar/network", extraParams = "" }: { initialQuery?: string; endpoint?: string; extraParams?: string }) {
+export default function NetworkExplorer(props: { initialQuery?: string; endpoint?: string; extraParams?: string }) {
+  const [style, setStyle] = useState<VizStyle>(DEFAULT_STYLE);
+  return <StyleCtx.Provider value={style}><NetworkExplorerInner {...props} style={style} setStyle={setStyle} /></StyleCtx.Provider>;
+}
+
+function NetworkExplorerInner({ initialQuery = "artificial intelligence", endpoint = "/api/scholar/network", extraParams = "", style, setStyle }: { initialQuery?: string; endpoint?: string; extraParams?: string; style: VizStyle; setStyle: (s: VizStyle) => void }) {
   const [q, setQ] = useState(initialQuery);
   const [committed, setCommitted] = useState<string | null>(null);
   const [scope, setScope] = useState(100);
@@ -278,14 +273,16 @@ export default function NetworkExplorer({ initialQuery = "artificial intelligenc
   const prepCmp1 = useMemo(() => (res ? prepare(res.graph, minEdge, sizeBy, 520, 400) : null), [res, minEdge, sizeBy]);
 
   const maxCore = prep?.metrics.maxCore ?? 0;
+  const PAL = paletteColors(style.palette), KINDS = Object.keys(KIND_COLOR) as NodeKind[];
+  const kindCol = useCallback((k: NodeKind) => (style.palette === "pastel" ? KIND_COLOR[k] : PAL[KINDS.indexOf(k) % PAL.length]), [style.palette]);   // eslint-disable-line react-hooks/exhaustive-deps
   const colorFor = useCallback((p: Prepared) => (n: NetNode): string => {
-    if (colorBy === "kind") return KIND_COLOR[n.kind];
+    if (colorBy === "kind") return kindCol(n.kind);
     if (colorBy === "year") return yearColor(n.yearMean, p.yLo, p.yHi);
     const pm = p.metrics.perNode.get(n.id)!;
     if (colorBy === "core") return lerp([79, 168, 159], [232, 120, 46], p.metrics.maxCore > 0 ? pm.core / p.metrics.maxCore : 0);
     if (colorBy === "constraint") return lerp([232, 120, 46], [90, 160, 184], Math.min(1, pm.constraint));   // 제약이 낮을수록(구조 공백을 잇는 중개자) 주황
-    return PALETTE[pm.community % PALETTE.length];
-  }, [colorBy]);
+    return PAL[pm.community % PAL.length];
+  }, [colorBy, style.palette, kindCol]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const topBy = useMemo(() => {
     if (!prep) return [] as { label: string; v: number; id: string }[];
@@ -352,7 +349,7 @@ export default function NetworkExplorer({ initialQuery = "artificial intelligenc
       </div>
 
       {!res && !loading && !err && <p className="text-center py-16 text-white/20 text-[15px]">검색어를 넣고 ‘분석 실행’을 누르면 상위 {scope}편으로 네트워크를 만듭니다.</p>}
-      {loading && !res && <p className="text-center py-16 text-white/40 text-[15px]">상위 {nf.format(scope)}편을 모으는 중…</p>}
+      {loading && !res && <DonutLoader title="네트워크 분석 중" hint="범위가 크면 1분 안팎 걸립니다(최대 10,000편)." steps={[{ label: `상위 ${nf.format(scope)}편 선정`, state: "done" }, { label: "저자·키워드·참고문헌 조회", state: "active" }, { label: "네트워크 구축·군집·중심성 계산", state: "pending" }]} />}
 
       {res && prep && (
         <>
@@ -405,6 +402,7 @@ export default function NetworkExplorer({ initialQuery = "artificial intelligenc
                 <button key={t.id} type="button" onClick={() => setTab(t.id)} className={`px-3 py-1.5 rounded-lg text-[14px] border ${tab === t.id ? "border-[#4fa89f]/60 bg-[#4fa89f]/15 text-[#7fd0c6] font-medium" : "border-white/[0.06] text-white/45 hover:text-white/75"}`}>{t.label}</button>
               ))}
             </div>
+            <NetGuide tab={tab} />
             {(tab === "network" || tab === "community" || tab === "gap" || tab === "kcore" || tab === "path" || tab === "compare") && (
               <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-white/45">
                 <label className="flex items-center gap-1.5">크기 <select value={sizeBy} onChange={(e) => setSizeBy(e.target.value as SizeBy)} className={selCls}>{SIZE_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select></label>
@@ -413,8 +411,16 @@ export default function NetworkExplorer({ initialQuery = "artificial intelligenc
                 <label className="flex items-center gap-1.5">노드 상한 <select value={maxNodes} onChange={(e) => setMaxNodes(Number(e.target.value))} className={selCls}>{[60, 90, 120, 160, 200].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
                 <label className="flex items-center gap-1.5">최소 연결 <input type="range" min={1} max={6} value={minEdge} onChange={(e) => setMinEdge(Number(e.target.value))} className="w-20 accent-[#4fa89f]" /><span className="w-3 tabular-nums text-white/70">{minEdge}</span></label>
                 <label className="flex items-center gap-1.5">라벨 <input type="range" min={0} max={40} value={labelN} onChange={(e) => setLabelN(Number(e.target.value))} className="w-20 accent-[#4fa89f]" /><span className="w-5 tabular-nums text-white/70">{labelN}</span></label>
+                <label className="flex items-center gap-1.5">색상 모드 <select value={style.palette} onChange={(e) => setStyle({ ...style, palette: e.target.value as VizStyle["palette"] })} className={selCls}>{PALETTES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select><span className="flex">{paletteColors(style.palette).slice(0, 6).map((c) => <i key={c} className="inline-block w-2.5 h-2.5" style={{ background: c }} />)}</span></label>
+                <label className="flex items-center gap-1.5">배경 <select value={style.bg} onChange={(e) => setStyle({ ...style, bg: e.target.value as VizStyle["bg"] })} className={selCls}>{BGS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select></label>
+                <label className="flex items-center gap-1.5">노드 크기 <input type="range" min={0.5} max={2.5} step={0.1} value={style.nodeScale} onChange={(e) => setStyle({ ...style, nodeScale: Number(e.target.value) })} className="w-20 accent-[#4fa89f]" /><span className="w-8 tabular-nums text-white/70">×{style.nodeScale.toFixed(1)}</span></label>
+                <label className="flex items-center gap-1.5">선 굵기 <input type="range" min={0.3} max={4} step={0.1} value={style.edgeWidth} onChange={(e) => setStyle({ ...style, edgeWidth: Number(e.target.value) })} className="w-20 accent-[#4fa89f]" /><span className="w-8 tabular-nums text-white/70">×{style.edgeWidth.toFixed(1)}</span></label>
+                <label className="flex items-center gap-1.5">선 투명도 <input type="range" min={0.2} max={1} step={0.05} value={style.edgeOpacity} onChange={(e) => setStyle({ ...style, edgeOpacity: Number(e.target.value) })} className="w-20 accent-[#4fa89f]" /></label>
+                <label className="flex items-center gap-1.5">선 색 <select value={style.edgeColor} onChange={(e) => setStyle({ ...style, edgeColor: e.target.value as EdgeColorMode })} className={selCls}><option value="theme">배경에 맞춤</option><option value="source">연결된 노드 색</option><option value="gold">금색</option><option value="gray">회색</option></select></label>
+                <label className="flex items-center gap-1.5">글자 <input type="range" min={8} max={18} step={0.5} value={style.labelSize} onChange={(e) => setStyle({ ...style, labelSize: Number(e.target.value) })} className="w-16 accent-[#4fa89f]" /></label>
+                <button type="button" onClick={() => setStyle(DEFAULT_STYLE)} className="px-2 py-0.5 rounded-lg text-[12px] border border-white/[0.08] text-white/45 hover:text-white/80">스타일 초기화</button>
                 <span className="ml-auto flex gap-1.5">
-                  {(["png", "jpeg", "svg"] as const).map((f) => (<button key={f} type="button" onClick={() => svgRef.current && exportSvgAs(svgRef.current, f, `network-${shownKind}.${f === "jpeg" ? "jpg" : f}`)} className="px-2.5 py-0.5 rounded-lg text-[12px] border border-white/[0.08] text-white/50 hover:text-white/80">{f.toUpperCase()}</button>))}
+                  {(["png", "jpeg", "svg"] as const).map((f) => (<button key={f} type="button" onClick={() => svgRef.current && exportSvgElement(svgRef.current, f, `network-${shownKind}.${f === "jpeg" ? "jpg" : f}`, { bg: bgOf(style.bg).bg, fg: bgOf(style.bg).text })} className="px-2.5 py-0.5 rounded-lg text-[12px] border border-white/[0.08] text-white/50 hover:text-white/80">{f.toUpperCase()}</button>))}
                 </span>
               </div>
             )}
@@ -435,10 +441,10 @@ export default function NetworkExplorer({ initialQuery = "artificial intelligenc
                   </div>
                 )}
                 <div className="rounded-2xl overflow-hidden border border-white/[0.05] relative" style={{ background: BG }}>
-                  {loading && <div className="absolute top-2 right-3 text-[12px] text-white/60 z-10">불러오는 중…</div>}
+                  {loading && <div className="absolute top-2 right-3 z-10"><DonutLoader compact size={44} title="다시 계산 중" steps={[{ label: "네트워크 갱신", state: "active" }]} /></div>}
                   <GraphCanvas prep={prep} colorOf={colorFor(prep)} shapeMode={shapeMode} labelN={labelN} focus={focus} selected={selected} onHover={setHover} onSelect={setSelected} path={tab === "path" ? path : null} svgRef={svgRef} regionNames={regionNames} />
                   <div className="flex flex-wrap gap-x-3 gap-y-1 px-3 py-2 text-[12px] text-white/55" style={{ background: PILL }}>
-                    {colorBy === "kind" && [...new Set(prep.nodes.map((n) => n.kind))].map((k) => (<span key={k} className="flex items-center gap-1"><i className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: KIND_COLOR[k] }} />{KIND_LABEL[k]}</span>))}
+                    {colorBy === "kind" && [...new Set(prep.nodes.map((n) => n.kind))].map((k) => (<span key={k} className="flex items-center gap-1"><i className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: kindCol(k) }} />{KIND_LABEL[k]}</span>))}
                     {colorBy === "community" && <span>색 = 군집(Louvain) · 크기 = {SIZE_OPTIONS.find((o) => o.id === sizeBy)?.label}</span>}
                     {colorBy === "year" && <span>색: 청록(오래됨) → 주황(최근) 평균 출판연도 {prep.yLo ? `${Math.round(prep.yLo)}~${Math.round(prep.yHi)}` : ""}</span>}
                     {colorBy === "core" && <span>색: 청록(바깥) → 주황(핵심부) · 최대 k-core = {maxCore}</span>}
@@ -494,7 +500,7 @@ export default function NetworkExplorer({ initialQuery = "artificial intelligenc
               <div className={box}>
                 <p className="text-[14px] font-semibold mb-2">군집 {prep.metrics.communities}개 <span className="text-white/30 font-normal text-[12px]">(크기순 · Louvain)</span></p>
                 <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">{prep.metrics.communityList.slice(0, 12).map((c) => (
-                  <div key={c.id} className="flex gap-2 items-start text-[13px]"><span className="mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PALETTE[c.id % PALETTE.length] }} /><div className="min-w-0"><p className="text-white/75 truncate">{c.members.slice(0, 4).join(" · ")}</p><p className="text-[12px] text-white/30">{c.size}개 노드{c.yearMean ? ` · 평균 ${c.yearMean.toFixed(0)}년` : ""}</p></div></div>
+                  <div key={c.id} className="flex gap-2 items-start text-[13px]"><span className="mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PAL[c.id % PAL.length] }} /><div className="min-w-0"><p className="text-white/75 truncate">{c.members.slice(0, 4).join(" · ")}</p><p className="text-[12px] text-white/30">{c.size}개 노드{c.yearMean ? ` · 평균 ${c.yearMean.toFixed(0)}년` : ""}</p></div></div>
                 ))}</div>
               </div>
             </div>
@@ -507,7 +513,7 @@ export default function NetworkExplorer({ initialQuery = "artificial intelligenc
               <div className="grid md:grid-cols-2 gap-3">
                 {profiles.slice(0, 8).map((c) => (
                   <div key={c.id} className="p-3 rounded-xl bg-[#0d0f14] border border-white/[0.04]">
-                    <div className="flex items-center gap-2 mb-1"><span className="w-3 h-3 rounded-full" style={{ background: PALETTE[c.id % PALETTE.length] }} /><b className="text-[14px] text-white">군집 {c.id + 1}</b><span className="text-[12px] text-white/35">노드 {c.size}개 · 논문 {c.papers}편{c.yearMean ? ` · 평균 ${c.yearMean.toFixed(0)}년(${c.yearMin}–${c.yearMax})` : ""}</span></div>
+                    <div className="flex items-center gap-2 mb-1"><span className="w-3 h-3 rounded-full" style={{ background: PAL[c.id % PAL.length] }} /><b className="text-[14px] text-white">군집 {c.id + 1}</b><span className="text-[12px] text-white/35">노드 {c.size}개 · 논문 {c.papers}편{c.yearMean ? ` · 평균 ${c.yearMean.toFixed(0)}년(${c.yearMin}–${c.yearMax})` : ""}</span></div>
                     <p className="text-[13px] text-white/75 mb-1.5">{c.members.join(" · ")}</p>
                     {c.keywords.length > 0 && <p className="text-[12px] text-white/50"><span className="text-white/30">대표 키워드 </span>{c.keywords.map((k) => `${k.name}(${k.n})`).join(", ")}</p>}
                     {c.journals.length > 0 && <p className="text-[12px] text-white/50"><span className="text-white/30">주요 저널 </span>{c.journals.map((k) => `${k.name}(${k.n})`).join(", ")}</p>}
@@ -585,6 +591,7 @@ export default function NetworkExplorer({ initialQuery = "artificial intelligenc
               <p className="text-[15px] font-semibold">네트워크 비교 — 두 검색어(같은 범위·같은 종류)</p>
               <div className="flex gap-2"><input value={q2} onChange={(e) => setQ2(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") void runCompare(); }} placeholder="비교할 검색어" className="flex-1 px-3 py-2 rounded-lg bg-[#0d0f14] border border-white/[0.06] text-white text-[14px]" />
                 <button type="button" onClick={() => void runCompare()} className="px-4 py-2 rounded-lg bg-[#4fa89f]/20 text-[#7fd0c6] border border-[#4fa89f]/30 text-[14px]">{loading2 ? "분석 중…" : "비교 실행"}</button></div>
+                {loading2 && <DonutLoader compact title="비교 네트워크 분석 중" steps={[{ label: "두 번째 검색어 조회", state: "done" }, { label: "네트워크 구축·비교", state: "active" }]} />}
               {err2 && <p className="text-[13px] text-[#f87171]">오류: {err2}</p>}
               {res2 && prep2 && prepCmp1 && overlap && (
                 <>

@@ -5,18 +5,49 @@
    선·면적·스택·스트림 / 막대 / 히스토그램 / 히트맵 / 산점도 / 트리맵·선버스트 / 샌키 / UpSet / 타일 지도 / 코드 / 포레스트 / 로렌츠 / 상자 / 흐름도
 ═══════════════════════════════════════════════════════════════ */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CardGuide } from "@/components/literature/guide-box";
+import { exportSvgElement, type ImgFormat } from "@/lib/literature/export-image";
 
 export const PAL = ["#4fa89f", "#e8782e", "#b5c23c", "#8e5c70", "#7b93c9", "#d3a53f", "#a07eb5", "#d9706a", "#9dbb5a", "#5aa0b8", "#c98a5a", "#6f8f6a"];
 export const nfmt = (n: number) => (Math.abs(n) >= 1e8 ? (n / 1e8).toFixed(1) + "억" : Math.abs(n) >= 1e4 ? (n / 1e4).toFixed(n >= 1e5 ? 0 : 1) + "만" : n.toLocaleString("ko-KR", { maximumFractionDigits: 1 }));
 const AX = "rgba(255,255,255,0.35)", GRID = "rgba(255,255,255,0.07)";
 
 export function Card({ title, sub, children, wide }: { title: string; sub?: string; children: React.ReactNode; wide?: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [hasSvg, setHasSvg] = useState(false), [busy, setBusy] = useState(false);
+  // 글자 크기 통일: viewBox 를 줄이거나 늘려 그리는 차트는 카드 폭에 따라 글자가 들쑥날쑥해진다. 화면에 보이는 크기가 항상 11~12.5px 이 되도록 맞춘다(큰 숫자 글자는 14~24px).
+  useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const norm = () => el.querySelectorAll("svg").forEach((svg) => {
+      if (svg.closest("[data-guide]")) return;
+      const vb = svg.viewBox?.baseVal, w = svg.getBoundingClientRect().width; if (!vb || !vb.width || !w) return;
+      const k = w / vb.width;
+      svg.querySelectorAll("text").forEach((t) => {
+        const o = Number(t.getAttribute("data-fs") ?? t.getAttribute("font-size") ?? 11); if (!t.hasAttribute("data-fs")) t.setAttribute("data-fs", String(o));
+        const eff = o > 13 ? Math.min(24, Math.max(14, o * k)) : Math.min(12.5, Math.max(11, o * k));
+        t.setAttribute("font-size", (eff / k).toFixed(2));
+      });
+    });
+    norm(); const ro = new ResizeObserver(norm); ro.observe(el); return () => ro.disconnect();
+  });
+  // 그림(SVG)이 있는 카드에만 내보내기 단추를 보인다(표·HTML 히트맵은 제외)
+  useEffect(() => { const t = setTimeout(() => setHasSvg(!!ref.current && [...ref.current.querySelectorAll("svg")].some((x) => !x.closest("[data-guide]") && x.getBoundingClientRect().width > 120)), 400); return () => clearTimeout(t); });
+  const save = async (fmt: ImgFormat) => {
+    const svgs = ref.current ? ([...ref.current.querySelectorAll("svg")] as SVGSVGElement[]).filter((x) => !x.closest("[data-guide]")) : [];
+    if (!svgs.length) return;
+    const svg = svgs.reduce((m, x) => (x.getBoundingClientRect().width * x.getBoundingClientRect().height > m.getBoundingClientRect().width * m.getBoundingClientRect().height ? x : m), svgs[0]);
+    setBusy(true); try { await exportSvgElement(svg, fmt, `${title.replace(/[^\w가-힣]+/g, "_").slice(0, 40)}.${fmt === "jpeg" ? "jpg" : fmt}`, { title }); } finally { setBusy(false); }
+  };
   return (
-    <div className={`p-4 rounded-2xl bg-[#13161e] border border-white/[0.05] ${wide ? "md:col-span-2" : ""}`}>
-      <p className="text-[14.5px] font-semibold text-white/90">{title}</p>
+    <div ref={ref} className={`p-4 rounded-2xl bg-[#13161e] border border-white/[0.05] ${wide ? "md:col-span-2" : ""}`} data-card>
+      <div className="flex items-start gap-2">
+        <p className="flex-1 text-[14.5px] font-semibold text-white/90">{title}</p>
+        {hasSvg && <span className="flex gap-1 flex-shrink-0" data-noexport>{(["png", "jpeg"] as const).map((f) => <button key={f} type="button" disabled={busy} onClick={() => save(f)} title={`이 차트를 ${f.toUpperCase()} 이미지로 저장`} className="px-1.5 py-0.5 rounded-md text-[11px] border border-white/[0.08] text-white/40 hover:text-white/80 disabled:opacity-40">{f === "jpeg" ? "JPG" : "PNG"}</button>)}</span>}
+      </div>
       {sub && <p className="text-[12px] text-white/35 mt-0.5 mb-2 leading-relaxed">{sub}</p>}
       <div className={sub ? "" : "mt-2"}>{children}</div>
+      <CardGuide title={title} />
     </div>
   );
 }

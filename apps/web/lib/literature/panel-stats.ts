@@ -130,3 +130,83 @@ export function lifecycle(years: number[], counts: number[]): { phase: Phase; gr
   const phase: Phase = lateShare > 0.55 && growth > 0.25 ? "신흥" : growth > 0.15 ? "성장" : growth < -0.2 && now < peak * 0.7 ? "쇠퇴" : Math.abs(growth) <= 0.15 && now >= peak * 0.6 ? "성숙" : "정체";
   return { phase, growth, peakYear: years[pk], share: lateShare };
 }
+
+// ───────────── 정밀화: 변화점 검정 · 예측 검증 · 자기상관 보정 추세 · 다중비교 · 비모수 검정 · 생존곡선 ─────────────
+
+/** Pettitt 변화점 검정(비모수). idx = 첫 구간의 마지막 위치(변화는 idx+1 부터), p 는 근사식 2·exp(−6K²/(n³+n²)) */
+export function pettitt(ys: number[]): { idx: number; k: number; p: number } {
+  const n = ys.length; if (n < 6) return { idx: -1, k: 0, p: 1 };
+  let best = 0, at = -1;
+  for (let t = 0; t < n - 1; t++) {
+    let u = 0; for (let i = 0; i <= t; i++) for (let j = t + 1; j < n; j++) u += Math.sign(ys[j] - ys[i]);
+    if (Math.abs(u) > best) { best = Math.abs(u); at = t; }
+  }
+  return { idx: at, k: best, p: Math.min(1, 2 * Math.exp((-6 * best * best) / (n ** 3 + n ** 2))) };
+}
+
+/** 1차 자기상관과 Durbin–Watson */
+export function autocorr1(r: number[]): { r1: number; dw: number } {
+  const n = r.length; if (n < 4) return { r1: 0, dw: 2 };
+  const m = r.reduce((s, v) => s + v, 0) / n; let num = 0, den = 0, dn = 0;
+  for (let i = 0; i < n; i++) { den += (r[i] - m) ** 2; if (i) { num += (r[i] - m) * (r[i - 1] - m); dn += (r[i] - r[i - 1]) ** 2; } }
+  return { r1: den ? num / den : 0, dw: den ? dn / den : 2 };
+}
+
+/** 자기상관을 줄인 Mann–Kendall(TFPW, Yue et al. 2002): Sen 기울기 제거 → 1차 자기상관 제거 → 기울기 복원 후 검정 */
+export function mannKendallTFPW(xs: number[], ys: number[]): MK & { r1: number; adjusted: boolean } {
+  const base = mannKendall(xs, ys), n = ys.length; if (n < 8) return { ...base, r1: 0, adjusted: false };
+  const b = base.slope, det = ys.map((y, i) => y - b * (xs[i] - xs[0])), { r1 } = autocorr1(det);
+  if (Math.abs(r1) < 1.96 / Math.sqrt(n)) return { ...base, r1, adjusted: false };
+  const pw = det.slice(1).map((v, i) => v - r1 * det[i]), back = pw.map((v, i) => v + b * (xs[i + 1] - xs[0])), mk = mannKendall(xs.slice(1), back);
+  return { ...mk, slope: b, r1, adjusted: true };
+}
+
+/** Holt 선형(감쇠) 지수평활: 격자 탐색으로 1단계 예측 오차 제곱합 최소 모수. 예측구간은 1단계 오차 sd·√k 근사 */
+export function holtForecast(ys: number[], h = 3): { fitted: number[]; forecast: { y: number; lo: number; hi: number }[]; alpha: number; beta: number; phi: number; sd: number } | null {
+  const n = ys.length; if (n < 6) return null;
+  const run = (a: number, b: number, phi: number) => {
+    let l = ys[0], t = ys[1] - ys[0], sse = 0; const fit = [ys[0]];
+    for (let i = 1; i < n; i++) { const f = l + phi * t; fit.push(f); sse += (ys[i] - f) ** 2; const ln = a * ys[i] + (1 - a) * (l + phi * t); t = b * (ln - l) + (1 - b) * phi * t; l = ln; }
+    return { sse, fit, l, t };
+  };
+  let best: { a: number; b: number; phi: number; sse: number; fit: number[]; l: number; t: number } | null = null;
+  for (let a = 0.1; a <= 0.95; a += 0.1) for (let b = 0.05; b <= 0.6; b += 0.1) for (const phi of [1, 0.95, 0.85]) { const r = run(a, b, phi); if (!best || r.sse < best.sse) best = { a, b, phi, ...r }; }
+  if (!best) return null;
+  const sd = Math.sqrt(best.sse / Math.max(1, n - 3)); let damp = 0, ph = 1;
+  const forecast = Array.from({ length: h }, (_, k) => { ph *= best!.phi; damp += ph; const y = Math.max(0, best!.l + damp * best!.t), w = 1.96 * sd * Math.sqrt(k + 1); return { y, lo: Math.max(0, y - w), hi: y + w }; });
+  return { fitted: best.fit, forecast, alpha: best.a, beta: best.b, phi: best.phi, sd };
+}
+
+/** Holm 단계적 보정 p */
+export function holm(ps: number[]): number[] {
+  const idx = ps.map((p, i) => [p, i] as const).sort((a, b) => a[0] - b[0]), out = new Array<number>(ps.length); let run = 0;
+  idx.forEach(([p, i], k) => { run = Math.max(run, Math.min(1, p * (ps.length - k))); out[i] = run; });
+  return out;
+}
+
+/** Hedges g 의 95% 신뢰구간(근사) */
+export function hedgesCI(d: number, n1: number, n2: number): { g: number; ci: [number, number] } {
+  const j = 1 - 3 / (4 * (n1 + n2) - 9), g = d * j, se = Math.sqrt((n1 + n2) / (n1 * n2) + (g * g) / (2 * (n1 + n2)));
+  return { g, ci: [g - 1.96 * se, g + 1.96 * se] };
+}
+
+/** Kruskal–Wallis(동점 보정). ε² = H/(n−1) */
+export function kruskal(groups: number[][]): { h: number; df: number; p: number; eps2: number; n: number } {
+  const g = groups.filter((x) => x.length >= 2), n = g.reduce((s, x) => s + x.length, 0); if (g.length < 2) return { h: 0, df: 0, p: 1, eps2: 0, n };
+  const all = g.flatMap((x, gi) => x.map((v) => [v, gi] as const)).sort((a, b) => a[0] - b[0]), rankSum = new Array(g.length).fill(0); let tie = 0;
+  for (let i = 0; i < all.length;) { let j = i; while (j + 1 < all.length && all[j + 1][0] === all[i][0]) j++; const r = (i + j) / 2 + 1, t = j - i + 1; if (t > 1) tie += t ** 3 - t; for (let k = i; k <= j; k++) rankSum[all[k][1]] += r; i = j + 1; }
+  let h = (12 / (n * (n + 1))) * g.reduce((s, x, i) => s + rankSum[i] ** 2 / x.length, 0) - 3 * (n + 1);
+  const c = 1 - tie / (n ** 3 - n); h = c > 0 ? h / c : h;
+  return { h, df: g.length - 1, p: chi2Sf(Math.max(0, h), g.length - 1), eps2: h / Math.max(1, n - 1), n };
+}
+
+/** Kaplan–Meier 생존곡선: dur = 관찰 기간, ev = 사건(탈락) 여부(false 면 중도절단). S(t) 를 t=0..maxT 에서 */
+export function kaplanMeier(dur: number[], ev: boolean[], maxT = 12): { t: number; s: number; atRisk: number }[] {
+  const out: { t: number; s: number; atRisk: number }[] = []; let s = 1;
+  for (let t = 0; t <= maxT; t++) {
+    const atRisk = dur.filter((d) => d >= (t > 0 ? t - 1 : 0)).length, events = t > 0 ? dur.filter((d, i) => d === t - 1 && ev[i]).length : 0;
+    if (t > 0 && atRisk > 0) s *= 1 - events / atRisk;
+    out.push({ t, s, atRisk });
+  }
+  return out;
+}
