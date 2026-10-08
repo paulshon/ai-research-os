@@ -160,14 +160,14 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
       </div>
 
       {!committed && <p className="text-center py-16 text-white/20 text-[15px]">검색어를 넣고 ‘분석 실행’을 누르면 일치한 논문 집합을 12개 영역으로 분석합니다.</p>}
-      {committed && mode === "single" && !cur && !err && <DonutLoader title={`${g.label} 분석 중`} hint="큰 집합·텍스트·인용 분석은 1분 안팎 걸립니다. 같은 검색의 결과는 5분간 캐시됩니다." steps={[{ label: "검색 일치 집합 확정", state: "done" }, { label: "SQL 집계·통계 계산", state: "active" }, { label: "차트 구성", state: "pending" }]} />}
+      {committed && mode === "single" && !cur && !err && <DonutLoader title={`${g.label} 분석 중`} expectedSec={sec.startsWith("topic") || sec === "citation" || sec === "longitudinal" || sec === "cross" ? 60 : 25} hint="큰 집합·텍스트·인용 분석은 1분 안팎 걸립니다. 같은 검색의 결과는 5분간 캐시됩니다." steps={[{ label: "검색 일치 집합 확정", state: "done" }, { label: "SQL 집계·통계 계산", state: "active" }, { label: "차트 구성", state: "pending" }]} />}
 
       {mode === "single" && cur && D && (
         <div key={palId} className="grid md:grid-cols-2 gap-4">{renderSec(sec, D)}</div>
       )}
       {mode === "all" && committed && (
         <div key={palId} className="space-y-8">
-          {doneN < ALL_SECS.length && <DonutLoader title="A~L 전체 분석 중" hint="영역마다 차례로 계산해 끝나는 대로 아래에 채워집니다(전체 3~5분)." steps={ALL_SECS.map((x) => ({ label: SEC_LABEL[x] ?? x, state: store[keyOf(x)] ? "done" as const : errs[x] ? "done" as const : (loading === keyOf(x) || ALL_SECS.findIndex((y) => !store[keyOf(y)] && !errs[y]) === ALL_SECS.indexOf(x)) ? "active" as const : "pending" as const }))} />}
+          {doneN < ALL_SECS.length && <DonutLoader title="A~L 전체 분석 중" percent={(doneN / ALL_SECS.length) * 100} hint="영역마다 차례로 계산해 끝나는 대로 아래에 채워집니다(전체 3~5분)." steps={ALL_SECS.map((x) => ({ label: SEC_LABEL[x] ?? x, state: store[keyOf(x)] ? "done" as const : errs[x] ? "done" as const : (loading === keyOf(x) || ALL_SECS.findIndex((y) => !store[keyOf(y)] && !errs[y]) === ALL_SECS.indexOf(x)) ? "active" as const : "pending" as const }))} />}
           <div className="p-3 rounded-xl bg-[#13161e] border border-white/[0.05] text-[13px] text-white/60 flex flex-wrap items-center gap-x-4 gap-y-1">
             <span>전체 분석 진행 <b className="text-white/85">{doneN}</b> / {ALL_SECS.length} 영역{loading ? ` · 계산 중 ${elapsed ? elapsed + "초" : ""}` : doneN === ALL_SECS.length ? " · 완료" : ""}</span>
             <span className="flex flex-wrap gap-1">{GROUPS.map((x) => <a key={x.id} href={`#llb-${x.id}`} className="px-2 py-0.5 rounded-md border border-white/[0.08] hover:text-white/90">{x.id}</a>)}</span>

@@ -349,7 +349,7 @@ function NetworkExplorerInner({ initialQuery = "artificial intelligence", endpoi
       </div>
 
       {!res && !loading && !err && <p className="text-center py-16 text-white/20 text-[15px]">검색어를 넣고 ‘분석 실행’을 누르면 상위 {scope}편으로 네트워크를 만듭니다.</p>}
-      {loading && !res && <DonutLoader title="네트워크 분석 중" hint="범위가 크면 1분 안팎 걸립니다(최대 10,000편)." steps={[{ label: `상위 ${nf.format(scope)}편 선정`, state: "done" }, { label: "저자·키워드·참고문헌 조회", state: "active" }, { label: "네트워크 구축·군집·중심성 계산", state: "pending" }]} />}
+      {loading && !res && <DonutLoader title="네트워크 분석 중" expectedSec={scope >= 1000 ? 60 : 20} hint="범위가 크면 1분 안팎 걸립니다(최대 10,000편)." steps={[{ label: `상위 ${nf.format(scope)}편 선정`, state: "done" }, { label: "저자·키워드·참고문헌 조회", state: "active" }, { label: "네트워크 구축·군집·중심성 계산", state: "pending" }]} />}
 
       {res && prep && (
         <>
