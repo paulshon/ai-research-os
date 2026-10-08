@@ -9,11 +9,11 @@ const TTL_MS = 30_000;
 let cache: { url: string; at: number } | null = null;
 
 /** process.env.CLICKHOUSE_URL 을 최신 터널 주소로 맞춘다. llb-search/llb-status 가 그 값을 읽는다. */
-export async function syncLlbEndpoint(): Promise<void> {
+export async function syncLlbEndpoint(force = false): Promise<void> {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!base || !key) return;
-  if (cache && Date.now() - cache.at < TTL_MS) {
+  if (!force && cache && Date.now() - cache.at < TTL_MS) {
     process.env.CLICKHOUSE_URL = cache.url;
     return;
   }

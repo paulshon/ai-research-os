@@ -39,7 +39,7 @@ const SECTION_HELP: Record<Sec, string> = {
   topic_evo: "순위 상위 최대 4,000편에서 연도 구간별 키워드 군집을 만들고, 이웃 구간의 군집을 구성원 겹침(Jaccard)으로 이어 신규·소멸·분기·합류를 판정합니다.",
   topic_rs: "순위 상위 최대 4,000편의 OpenAlex 개념으로 개념 간 거리(1−동시출현 코사인)를 만들고 논문마다 Rao–Stirling 다양성을 계산합니다.",
   topic_map: "상위 최대 1,800편의 제목·초록을 TF-IDF → 잠재 의미 분석(LSA) → k-means 로 묶어 2차원에 배치합니다(임베딩 모델이 아닌 통계 기반 근사).",
-  topic_gap: "상위 주제 18개 × 연구 방법·대상 사전(제목+초록 검색)의 관측/기대 비율입니다. 기대보다 적은 칸이 공백 후보입니다.",
+  topic_gap: "순위 상위 최대 4,000편 중 상위 주제 18개 × 연구 방법·대상 사전(제목+초록 검색)의 관측/기대 비율입니다. 기대보다 적은 칸이 공백 후보입니다.",
   funding: "일치한 전체 논문을 집계합니다. 연구비 정보는 일부 논문에만 있습니다.", citation: "인용순 상위 260편의 참고문헌(papers_v2)으로 계산합니다.", model: "무작위 표본(최대 4만 편)으로 로그 인용을 회귀합니다.", quality: "일치한 전체 논문의 항목 채움률을 집계합니다.",
   longitudinal: "연도별 완결 자료(올해 제외)를 시간 순서로 따라가며 성장 모형·변화점·Mann–Kendall 추세 검정·주제 생애주기·저자 유입·코호트 인용 궤적을 계산합니다.",
   cross: "선택한 기준 연도 한 해의 논문만으로 분야·유형·국가를 비교하고 교차표(χ²)·Welch t 검정·분산분석·횡단 회귀를 계산합니다.",
@@ -102,7 +102,7 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
           if (!pr) { pr = fetch(`${endpoint}?q=${encodeURIComponent(committed)}&section=${x}${x === "cross" ? `&refYear=${refYear}` : ""}${extraParams}`).then(async (r) => { const j = (await r.json()) as Resp; if (!r.ok || j.error) throw new Error(j.error || `HTTP ${r.status}`); return j; }); pending.current.set(k, pr); const kk = k; void pr.then(() => pending.current.delete(kk), () => pending.current.delete(kk)); }
           const d = await pr;
           if (!stop) { setStore((st) => ({ ...st, [k]: d })); setErrs((e) => { const n = { ...e }; delete n[x]; return n; }); }
-        } catch (e) { const msg = String((e as Error)?.message ?? e); if (!stop && /Timeout|TIMEOUT|HTTP 5/.test(msg) && !retried.has(x)) { retried.add(x); queue.push(x); } else if (!stop) setErrs((er) => ({ ...er, [x]: msg })); }
+        } catch (e) { const msg = String((e as Error)?.message ?? e); if (!stop && /Timeout|TIMEOUT|HTTP 5|ClickHouse 5\d\d|터널|busy/.test(msg) && !retried.has(x)) { retried.add(x); queue.push(x); } else if (!stop) setErrs((er) => ({ ...er, [x]: msg.slice(0, 160) })); }
       }
     };
     // 가벼운 영역은 둘씩, 텍스트·인용망처럼 무거운 영역은 그 뒤에 하나씩(서버·DB 과부하로 시간 초과가 나는 것을 막는다)
@@ -171,7 +171,8 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
           <div className="p-3 rounded-xl bg-[#13161e] border border-white/[0.05] text-[13px] text-white/60 flex flex-wrap items-center gap-x-4 gap-y-1">
             <span>전체 분석 진행 <b className="text-white/85">{doneN}</b> / {ALL_SECS.length} 영역{loading ? ` · 계산 중 ${elapsed ? elapsed + "초" : ""}` : doneN === ALL_SECS.length ? " · 완료" : ""}</span>
             <span className="flex flex-wrap gap-1">{GROUPS.map((x) => <a key={x.id} href={`#llb-${x.id}`} className="px-2 py-0.5 rounded-md border border-white/[0.08] hover:text-white/90">{x.id}</a>)}</span>
-            {Object.keys(errs).length > 0 && <span className="text-[#f87171]">오류: {Object.entries(errs).map(([k, v]) => `${k}: ${v}`).join(" · ")}</span>}
+            {Object.keys(errs).length > 0 && <span className="text-[#f87171]">오류: {Object.entries(errs).map(([k, v]) => `${SEC_LABEL[k] ?? k}: ${v}`).join(" · ")}</span>}
+            {Object.keys(errs).length > 0 && !loading && <button type="button" onClick={() => { setErrs({}); setRunId((n) => n + 1); }} className="px-2.5 py-0.5 rounded-lg text-[12px] border border-[#e8b84b]/40 text-[#e8c97a] hover:bg-[#e8b84b]/10">실패한 영역만 다시 시도</button>}
           </div>
           {GROUPS.map((x) => {
             const parts: Sec[] = x.sec ? [x.sec] : (x.subs ?? []).map((u) => u.id);
@@ -339,7 +340,7 @@ function TopicGap({ D }: { D: any }) {
   const ratio = D.matrix.map((r: any[]) => r.map((c) => Math.min(2, c.ratio))), flag = (r: number, c: number) => D.matrix[r][c].e >= 4 && D.matrix[r][c].ratio < 0.4;
   const gaps = D.matrix.flatMap((r: any[], i: number) => r.map((c, j) => ({ i, j, ...c }))).filter((x: any) => x.e >= 4 && x.ratio < 0.4).sort((a: any, b: any) => b.e - a.e).slice(0, 12);
   return <><Net />
-    <Card title="연구 공백 매트릭스 — 주제 × 방법·대상" sub={`행: 상위 주제 ${D.topics.length}개, 열: 연구 방법(앞 9) · 연구 대상(뒤 7)을 제목+초록에서 사전 검색. 값 = 관측/기대(기대 = 주제 편수 × 열 점유율). 노란 테두리 = 기대 4건 이상인데 관측이 40% 미만인 공백 후보${D.sampled ? ` · 해시 표본(1/${D.sampled})` : ""}`} wide>
+    <Card title="연구 공백 매트릭스 — 주제 × 방법·대상" sub={`행: 상위 주제 ${D.topics.length}개, 열: 연구 방법(앞 9) · 연구 대상(뒤 7)을 제목+초록에서 사전 검색. 값 = 관측/기대(기대 = 주제 편수 × 열 점유율). 노란 테두리 = 기대 4건 이상인데 관측이 40% 미만인 공백 후보· 순위 상위 ${nf.format(D.total)}편 표본`} wide>
       <Heatmap rows={D.topics} cols={D.cols.map((c: any) => c.label)} values={ratio} lo={0} hi={2} scheme="div" cell={44} rowW={210} flag={flag} fmt={(v) => v.toFixed(1)} />
       <p className="text-[11.5px] text-white/30 mt-2">파랑 = 기대보다 적음(공백 후보), 주황 = 기대보다 많음. 단어 사전 기반이라 표기 차이로 누락될 수 있습니다.</p></Card>
     <Card title="공백 후보 상위" sub="기대 건수가 큰 순서"><div className="space-y-1">{gaps.length ? gaps.map((g: any, k: number) => <p key={k} className="text-[12.5px] text-white/70">▸ <b className="text-white/90">{D.topics[g.i]}</b> × {D.cols[g.j].label} — 관측 {g.o}건 / 기대 {g.e.toFixed(1)}건</p>) : <Empty text="뚜렷한 공백 후보가 없습니다" />}</div></Card>

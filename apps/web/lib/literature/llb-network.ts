@@ -3,6 +3,7 @@
 // 이 파일은 생성 파일이 아니므로 직접 수정해도 된다.
 
 import { buildSearch, searchLlb, networkLlb } from "@/lib/literature/llb-search";
+import { syncLlbEndpoint } from "@/lib/literature/llb-endpoint";
 import { buildGraph, summarize, type NetKind, type NetRecord, type Graph, type Summary } from "@/lib/literature/network-graph";
 import { buildCocitation, emergingTerms, nodeMembership, paperTable, timelineGraphs, ENTITY_LABEL, type EmergingResult, type PaperLite, type Period } from "@/lib/literature/network-analysis-extra";
 
@@ -16,21 +17,47 @@ const esc = (x: unknown) => String(x).replace(/\\/g, "\\\\").replace(/\t/g, "\\t
 const quote = (x: unknown) => "'" + String(x).replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\n/g, "\\n").replace(/\t/g, "\\t").replace(/\r/g, "\\r") + "'";
 const paramValue = (v: unknown) => (Array.isArray(v) ? "[" + v.map(quote).join(",") + "]" : esc(v));
 
-/** SQL 은 본문으로 보낸다(URL 길이 한도를 피함). 값은 param_* 로만 전달한다. */
+// 이 프로세스(서버리스 호출 하나)에서 동시에 보내는 ClickHouse 질의 수. 한꺼번에 수십 개를 보내면 DB 가 모두를 느리게 처리해 게이트웨이·터널의 100초 제한을 넘는다.
+const CH_CONC = Number(process.env.LLB_CH_CONCURRENCY || 3);
+let chRunning = 0; const chWaiters: (() => void)[] = [];
+const chAcquire = () => new Promise<void>((resolve) => { if (chRunning < CH_CONC) { chRunning++; resolve(); } else chWaiters.push(resolve); });
+const chRelease = () => { const w = chWaiters.shift(); if (w) w(); else chRunning--; };
+const brief = (t: string) => (/<html|<!DOCTYPE/i.test(t) ? "터널·게이트웨이 일시 오류(Cloudflare 응답)" : t.replace(/\s+/g, " ").slice(0, 260));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** SQL 은 본문으로 보낸다(URL 길이 한도를 피함). 값은 param_* 로만 전달한다. 동시 실행 수를 제한하고, 일시적 502/503/504/524/530 은 한 번 다시 시도한다. */
 export async function ch(sql: string, params: Record<string, unknown> = {}, timeoutS = 90): Promise<any[]> {
-  const url = new URL(process.env.CLICKHOUSE_URL || "http://127.0.0.1:8123");
-  url.searchParams.set("default_format", "JSONEachRow");
-  url.searchParams.set("max_execution_time", String(Math.max(Number(process.env.LLB_TIMEOUT_S || 15), timeoutS)));
-  url.searchParams.set("max_result_rows", "100000");   // 읽기 전용 계정(llb_ro)의 상한이 100000 이다 — 이보다 크게 요청하면 거부된다
-  for (const [k, v] of Object.entries(params)) url.searchParams.set("param_" + k, paramValue(v));
+  const tS = Math.min(timeoutS, 95);   // Cloudflare 임시 터널은 약 100초에서 끊는다 — 그 전에 DB 가 스스로 중단하게 한다
+  const mkUrl = () => {
+    const u = new URL(process.env.CLICKHOUSE_URL || "http://127.0.0.1:8123");
+    u.searchParams.set("default_format", "JSONEachRow");
+    u.searchParams.set("max_execution_time", String(Math.max(Number(process.env.LLB_TIMEOUT_S || 15), tS)));
+    u.searchParams.set("max_result_rows", "100000");   // 읽기 전용 계정(llb_ro)의 상한이 100000 이다 — 이보다 크게 요청하면 거부된다
+    for (const [k, v] of Object.entries(params)) u.searchParams.set("param_" + k, paramValue(v));
+    return u;
+  };
   const headers: Record<string, string> = { "content-type": "text/plain; charset=utf-8" };
   if (process.env.CLICKHOUSE_USER) {
     headers["Authorization"] = "Basic " + Buffer.from(process.env.CLICKHOUSE_USER + ":" + (process.env.CLICKHOUSE_PASSWORD || "")).toString("base64");
   }
-  const res = await fetch(url, { method: "POST", headers, body: sql, signal: AbortSignal.timeout((timeoutS + 10) * 1000) });
-  const text = await res.text();
-  if (!res.ok) throw new Error("LLB ClickHouse " + res.status + ": " + text.slice(0, 300));
-  return text.trim() ? text.trim().split("\n").map((l) => JSON.parse(l)) : [];
+  let last: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await chAcquire();
+    try {
+      const res = await fetch(mkUrl(), { method: "POST", headers, body: sql, signal: AbortSignal.timeout((tS + 8) * 1000) });
+      const text = await res.text();
+      if (res.ok) return text.trim() ? text.trim().split(String.fromCharCode(10)).map((l) => JSON.parse(l)) : [];
+      last = new Error("LLB ClickHouse " + res.status + ": " + brief(text));
+      if (![502, 503, 504, 524, 530].includes(res.status)) throw last;
+    } catch (e) {
+      if (last && e === last) throw e;
+      last = e instanceof Error ? e : new Error(String(e));
+      if (/ClickHouse 4\d\d/.test(last.message)) throw last;
+    } finally { chRelease(); }
+    // 임시 터널은 끊기면 주소가 바뀐다 — 다시 시도하기 전에 Supabase 의 최신 주소를 강제로 다시 읽는다
+    if (attempt < 2) { await sleep(attempt === 0 ? 3000 : 9000); await syncLlbEndpoint(true).catch(() => undefined); }
+  }
+  throw last ?? new Error("LLB ClickHouse 요청 실패");
 }
 
 const noFormat = (sql: string) => sql.replace(/\s*FORMAT JSONEachRow\s*$/, "");

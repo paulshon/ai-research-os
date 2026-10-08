@@ -35,3 +35,10 @@ curl http://127.0.0.1:18124/ping -u llb:<게이트웨이 비밀번호>          
 GET  <배포 주소>/api/scholar/llb-status                                         # connected:true, percent:100
 GET  <배포 주소>/api/scholar/network?q=machine+learning&kind=coword&scope=100
 ```
+
+## 502/524 가 나는 이유와 대책 (2026-10-08)
+- 증상: 대시보드 ‘A~L 한 번에 보기’에서 일부 영역이 `LLB ClickHouse 502`(Cloudflare 오류 HTML) 또는 530 으로 실패.
+- 원인 ① 동시 질의 과부하: ‘artificial intelligence’ 같은 큰 검색은 질의 하나가 lit_papers 1.3억 행의 제목 색인을 훑어 5~10초 걸리고, 한 영역이 질의 8~12개를 한꺼번에 보낸다. 영역 둘만 겹쳐도 20여 개가 동시에 돌아 전부 느려지고, 게이트웨이(70초)·Cloudflare 임시 터널(약 100초) 제한을 넘겨 502/524 가 난다(DB 쪽 시험에서도 4개 영역 동시 실행 시 110초 초과 재현).
+- 원인 ② 연결 재사용 경쟁: 게이트웨이(Node)의 keep-alive 기본값(5초)이 터널이 쓰던 연결을 먼저 닫아 한참 쉰 뒤 첫 요청이 502.
+- 원인 ③ 터널 주소 교체: 감독 프로그램이 재시작되어 임시 터널 주소가 바뀌면 진행 중이던 요청이 530.
+- 대책: 게이트웨이에 동시 실행 제한(GATEWAY_CONCURRENCY, 기본 5)과 대기열(최대 55초, 넘으면 503), keep-alive 120초, 상류 제한 92초, 분당 600회. 앱의 `ch()` 는 프로세스당 동시 3개(LLB_CH_CONCURRENCY)로 제한하고 502/503/504/524/530 을 한 번 다시 시도하며, 오류 메시지는 Cloudflare HTML 대신 한 줄로 줄인다. 대시보드의 한 번에 보기는 일시 오류를 영역 단위로 한 번 더 시도한다.

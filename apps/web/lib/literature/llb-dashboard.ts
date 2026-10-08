@@ -2,7 +2,7 @@
 // 큰 집합은 SQL 로 직접 집계하고, 텍스트·네트워크 분석처럼 논문 단위 계산이 필요한 것은 순위 상위 N편 표본을 쓴다.
 // 이 파일은 생성 파일이 아니므로 직접 수정해도 된다.
 
-import { buildSearch, searchLlb, networkLlb } from "@/lib/literature/llb-search";
+import { buildSearch, networkLlb } from "@/lib/literature/llb-search";
 import { ch, topWids, loadRefs } from "@/lib/literature/llb-network";
 import { analyzeGraph, buildGraph, type NetRecord } from "@/lib/literature/network-graph";
 import {
@@ -235,16 +235,25 @@ async function topicMap(opts: any) {
   return { points: recs.map((r, i) => ({ x: xy[i].x / mx, y: xy[i].y / my, c: asg[i], title: r.title, year: r.year, cited: r.cited })), clusters, vocab: m.vocab.length, docs: recs.length };
 }
 
-async function topicGap(sc: Scope) {
-  const mod = hashMod(sc, 150000);
-  const lit = (a: string[]) => a.map((t) => `'${t.replace(/'/g, "\\'")}'`).join(",");
+async function topicGap(opts: any) {
+  // 순위 상위 4,000편(주제 변천·학제성·토픽 지도와 같은 표본, 같은 캐시)의 제목+초록을 사전과 대조한다.
+  // (예전에는 일치 집합 전체에서 초록을 읽어 큰 검색에서 3분 넘게 걸렸다 — 초록은 일치 논문이 표 전체에 흩어져 있어 거의 모든 블록을 읽어야 했기 때문)
+  const recs = (await textSample(opts, 4000, true)).filter((r) => r.topic);
   const cols = [...METHODS.map((l) => ({ ...l, kind: "method" })), ...OBJECTS.map((l) => ({ ...l, kind: "object" }))];
-  const cells = cols.map((l, i) => `countIf(multiSearchAnyCaseInsensitive(txt, [${lit(l.terms)}])) AS c${i}`).join(", ");
-  const r = await rows(sc, `SELECT topic, count() n, ${cells} FROM (SELECT topic, concat(title, ' ', substring(abstract, 1, 600)) AS txt FROM $T WHERE $W AND topic != '' AND cityHash64(wid) % ${mod} = 0 AND topic IN (SELECT topic FROM $T WHERE $W AND topic != '' GROUP BY topic ORDER BY count() DESC LIMIT 18)) GROUP BY topic ORDER BY n DESC FORMAT JSONEachRow`, 115);
-  const topics = r.map((x) => String(x.topic)), N = r.reduce((s, x) => s + num(x.n), 0);
-  const colTot = cols.map((_, i) => r.reduce((s, x) => s + num(x["c" + i]), 0));
-  const matrix = r.map((x) => cols.map((_, i) => { const o = num(x["c" + i]), e = (num(x.n) * colTot[i]) / Math.max(1, N); return { o, e, ratio: e > 0 ? o / e : 0 }; }));
-  return { topics, rowN: r.map((x) => num(x.n)), cols: cols.map((c) => ({ id: c.id, label: c.label, kind: c.kind })), matrix, sampled: mod > 1 ? mod : 0, total: N };
+  const byTopic = new Map<string, number>(); recs.forEach((r) => byTopic.set(r.topic, (byTopic.get(r.topic) ?? 0) + 1));
+  const topics = [...byTopic.entries()].sort((a, b) => b[1] - a[1]).slice(0, 18).map(([t]) => t), tset = new Set(topics);
+  const lows = cols.map((l) => l.terms.map((t) => t.toLowerCase()));
+  const n = new Map<string, number>(), cnt = new Map<string, number[]>();
+  for (const r of recs) {
+    if (!tset.has(r.topic)) continue;
+    const txt = (r.title + " " + r.abstract.slice(0, 600)).toLowerCase();
+    n.set(r.topic, (n.get(r.topic) ?? 0) + 1);
+    const row = cnt.get(r.topic) ?? cnt.set(r.topic, new Array(cols.length).fill(0)).get(r.topic)!;
+    lows.forEach((terms, i) => { if (terms.some((t) => txt.includes(t))) row[i]++; });
+  }
+  const N = [...n.values()].reduce((s, v) => s + v, 0), colTot = cols.map((_, i) => topics.reduce((s, t) => s + (cnt.get(t)?.[i] ?? 0), 0));
+  const matrix = topics.map((t) => cols.map((_, i) => { const o = cnt.get(t)?.[i] ?? 0, e = ((n.get(t) ?? 0) * colTot[i]) / Math.max(1, N); return { o, e, ratio: e > 0 ? o / e : 0 }; }));
+  return { topics, rowN: topics.map((t) => n.get(t) ?? 0), cols: cols.map((c) => ({ id: c.id, label: c.label, kind: c.kind })), matrix, sampled: 0, total: N };
 }
 
 // ───────────────────────── G. 재원·오픈액세스 ─────────────────────────
@@ -473,7 +482,7 @@ async function cross(sc: Scope, refYear: number) {
 
 export async function dashboardSection(opts: any, section: Section, extra: { refYear?: number } = {}): Promise<any> {
   const t0 = Date.now();
-  const needsScope = !["topic_evo", "topic_rs", "topic_map", "citation"].includes(section);
+  const needsScope = !["topic_evo", "topic_rs", "topic_map", "topic_gap", "citation"].includes(section);
   const sc = needsScope ? await matchScope(opts) : null;
   let data: any;
   switch (section) {
@@ -486,7 +495,7 @@ export async function dashboardSection(opts: any, section: Section, extra: { ref
     case "topic_evo": data = await topicEvo(opts); break;
     case "topic_rs": data = await topicRs(opts); break;
     case "topic_map": data = await topicMap(opts); break;
-    case "topic_gap": data = await topicGap(sc!); break;
+    case "topic_gap": data = await topicGap(opts); break;
     case "funding": data = await funding(sc!); break;
     case "citation": data = await citation(opts); break;
     case "model": data = await model(sc!); break;
@@ -494,6 +503,7 @@ export async function dashboardSection(opts: any, section: Section, extra: { ref
     case "longitudinal": data = await longitudinal(sc!); break;
     case "cross": data = await cross(sc!, extra.refYear ?? YEAR_NOW - 2); break;
   }
-  const head = sc ? { matched: sc.matched, staged: sc.staged } : { matched: (await searchLlb({ ...opts, limit: 1, offset: 0 })).total ?? null, staged: true };
+  // 일치 편수(머리말용). 검색 화면의 개수 질의(searchLlb)는 제한 시간이 15초라 큰 검색·부하 때 실패해 영역 전체를 망쳤다 — 긴 제한의 matchScope 로 세고, 그래도 안 되면 편수만 비운다(분석 결과는 그대로 돌려준다)
+  const head = sc ? { matched: sc.matched, staged: sc.staged } : await matchScope(opts).then((m) => ({ matched: m.matched as number | null, staged: m.staged })).catch(() => ({ matched: null as number | null, staged: true }));
   return { section, ...head, ms: Date.now() - t0, data };
 }
