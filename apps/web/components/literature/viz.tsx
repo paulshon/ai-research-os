@@ -7,6 +7,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CardGuide } from "@/components/literature/guide-box";
+import { Lines, useBox } from "@/components/literature/viz-text";
+import { maxTextWidth, spread, textWidth, wrapText } from "@/lib/literature/text-measure";
 import { exportSvgElement, type ImgFormat } from "@/lib/literature/export-image";
 
 export const PAL = ["#4fa89f", "#e8782e", "#b5c23c", "#8e5c70", "#7b93c9", "#d3a53f", "#a07eb5", "#d9706a", "#9dbb5a", "#5aa0b8", "#c98a5a", "#6f8f6a"];
@@ -70,7 +72,7 @@ function niceTicks(lo: number, hi: number, n = 5): number[] {
 // ─────────── 선·면적·스택 ───────────
 export interface Series { name: string; color?: string; points: { x: number; y: number }[] }
 export function LineChart({ series, height = 240, area = false, stacked = false, percent = false, yFmt = nfmt, xInt = true, ymax }: { series: Series[]; height?: number; area?: boolean; stacked?: boolean; percent?: boolean; yFmt?: (n: number) => string; xInt?: boolean; ymax?: number }) {
-  const W = 640, P = { l: 46, r: 12, t: 10, b: 24 };
+  const [boxRef, W] = useBox(), P = { l: 46, r: 12, t: 10, b: 24 };
   const xs = [...new Set(series.flatMap((s) => s.points.map((p) => p.x)))].sort((a, b) => a - b);
   const [hover, setHover] = useState<number | null>(null);
   const d = useMemo(() => {
@@ -84,14 +86,14 @@ export function LineChart({ series, height = 240, area = false, stacked = false,
   }, [series, xs.join(","), stacked, percent, ymax]);
   if (!xs.length) return <Empty />;
   const x0 = xs[0], x1 = xs[xs.length - 1], X = (x: number) => P.l + ((x - x0) / Math.max(1, x1 - x0)) * (W - P.l - P.r), Y = (v: number) => P.t + (1 - v / d.mx) * (height - P.t - P.b);
-  const ticks = niceTicks(0, d.mx, 4), xt = niceTicks(x0, x1, 6).filter((v) => !xInt || Number.isInteger(v));
+  const ticks = niceTicks(0, d.mx, 4).filter((t, i, a) => i === 0 || yFmt(t) !== yFmt(a[i - 1])), xt = niceTicks(x0, x1, 6).filter((v) => !xInt || Number.isInteger(v));
   const col = (i: number) => series[i].color ?? PAL[i % PAL.length];
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${height}`} className="w-full h-auto" onMouseLeave={() => setHover(null)}
+    <div ref={boxRef}>
+      <svg viewBox={`0 0 ${W} ${height}`} width={W} height={height} className="block" onMouseLeave={() => setHover(null)}
         onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); const px = ((e.clientX - r.left) / r.width) * W; let best = 0, bd = 1e9; xs.forEach((x, i) => { const dd = Math.abs(X(x) - px); if (dd < bd) { bd = dd; best = i; } }); setHover(best); }}>
         {ticks.map((t) => <g key={t}><line x1={P.l} x2={W - P.r} y1={Y(t)} y2={Y(t)} stroke={GRID} /><text x={P.l - 6} y={Y(t) + 3.5} textAnchor="end" fontSize={10.5} fill={AX}>{yFmt(t)}</text></g>)}
-        {xt.map((t) => <text key={t} x={X(t)} y={height - 7} textAnchor="middle" fontSize={10.5} fill={AX}>{t}</text>)}
+        {xt.map((t) => { const edge = X(t) - 16 < 0 ? "start" : X(t) + 16 > W ? "end" : "middle"; return <text key={t} x={X(t)} y={height - 7} textAnchor={edge} fontSize={10.5} fill={AX}>{t}</text>; })}
         {series.map((_, i) => {
           const top = d.tops[i], bot = stacked || percent ? (i ? d.tops[i - 1] : xs.map(() => 0)) : xs.map(() => 0);
           const idx = xs.map((_, j) => j).filter((j) => stacked || percent || d.has[i][j]);   // 값이 없는 해는 0 으로 떨어뜨리지 않고 건너뛴다
@@ -109,24 +111,24 @@ export function LineChart({ series, height = 240, area = false, stacked = false,
 
 /** 스트림그래프: 중심선을 가운데로 둔 쌓은 면적(주제 변천) */
 export function Stream({ years, layers, height = 280 }: { years: number[]; layers: { name: string; values: number[] }[]; height?: number }) {
-  const W = 640, P = { l: 12, r: 12, t: 8, b: 22 };
+  const [boxRef, W] = useBox(), P = { l: 24, r: 24, t: 8, b: 22 };
   const { paths, mx } = useMemo(() => {
     const tot = years.map((_, j) => layers.reduce((s, l) => s + l.values[j], 0)), mx = Math.max(1, ...tot), base = tot.map((t) => -t / 2);
     const x0 = years[0], x1 = years[years.length - 1], X = (x: number) => P.l + ((x - x0) / Math.max(1, x1 - x0)) * (W - P.l - P.r), Y = (v: number) => P.t + (0.5 - v / mx / 1) * (height - P.t - P.b);
     const cum = base.slice(), paths = layers.map((l) => { const lo = cum.slice(), hi = cum.map((c, j) => c + l.values[j]); hi.forEach((v, j) => (cum[j] = v)); const up = years.map((y, j) => `${j ? "L" : "M"}${X(y).toFixed(1)} ${Y(hi[j]).toFixed(1)}`).join(""); const dn = years.map((_, j) => { const k = years.length - 1 - j; return `L${X(years[k]).toFixed(1)} ${Y(lo[k]).toFixed(1)}`; }).join(""); return up + dn + "Z"; });
     return { paths, mx };
-  }, [years, layers, height]);
+  }, [years, layers, height, W]);
   const [hl, setHl] = useState<number | null>(null);
   if (years.length < 2) return <Empty />;
   const x0 = years[0], x1 = years[years.length - 1], X = (x: number) => P.l + ((x - x0) / Math.max(1, x1 - x0)) * (W - P.l - P.r);
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${height}`} className="w-full h-auto">
+    <div ref={boxRef}>
+      <svg viewBox={`0 0 ${W} ${height}`} width={W} height={height} className="block">
         {paths.map((p, i) => <path key={i} d={p} fill={PAL[i % PAL.length]} fillOpacity={hl == null || hl === i ? 0.88 : 0.2} stroke="#13161e" strokeWidth={0.6} onMouseEnter={() => setHl(i)} onMouseLeave={() => setHl(null)}><title>{layers[i].name}</title></path>)}
         {niceTicks(x0, x1, 7).filter(Number.isInteger).map((t) => <text key={t} x={X(t)} y={height - 6} textAnchor="middle" fontSize={10.5} fill={AX}>{t}</text>)}
       </svg>
       <div className="min-h-[18px] text-[12px] text-white/60">{hl != null ? layers[hl].name : " "} <span className="text-white/25">(최대 {nfmt(mx)}편/년)</span></div>
-      <Legend items={layers.map((l, i) => ({ name: l.name.length > 30 ? l.name.slice(0, 29) + "…" : l.name, color: PAL[i % PAL.length] }))} />
+      <Legend items={layers.map((l, i) => ({ name: l.name, color: PAL[i % PAL.length] }))} />
     </div>
   );
 }
@@ -136,30 +138,32 @@ export function BarsH({ items, fmt = nfmt, color = "#4fa89f", max, onClick }: { 
   if (!items.length) return <Empty />;
   const mx = max ?? Math.max(1e-9, ...items.map((i) => i.value));
   return <div className="space-y-1">{items.map((it, i) => (
-    <div key={i} className="relative h-[24px] rounded bg-white/[0.03] overflow-hidden" style={{ cursor: onClick ? "pointer" : "default" }} onClick={() => onClick?.(i)} title={`${it.label}: ${fmt(it.value)}${it.sub ? " · " + it.sub : ""}`}>
+    <div key={i} className="relative min-h-[24px] rounded bg-white/[0.03] overflow-hidden" style={{ cursor: onClick ? "pointer" : "default" }} onClick={() => onClick?.(i)} title={`${it.label}: ${fmt(it.value)}${it.sub ? " · " + it.sub : ""}`}>
       <div className="absolute inset-y-0 left-0" style={{ width: `${Math.max(1, (Math.abs(it.value) / mx) * 100)}%`, background: (it.color ?? color) + "66" }} />
-      <span className="relative px-2 text-[12.5px] leading-[24px] text-white/78 flex justify-between gap-2"><span className="truncate"><span className="text-white/30 mr-1.5">{i + 1}</span>{it.label}</span><span className="tabular-nums text-white/55 whitespace-nowrap">{fmt(it.value)}{it.sub ? <span className="text-white/30"> · {it.sub}</span> : null}</span></span>
+      <span className="relative px-2 py-[3px] text-[12px] leading-[18px] text-white/78 flex justify-between items-start gap-2"><span className="min-w-0 break-words"><span className="text-white/30 mr-1.5">{i + 1}</span>{it.label}</span><span className="tabular-nums text-white/55 whitespace-nowrap">{fmt(it.value)}{it.sub ? <span className="text-white/30"> · {it.sub}</span> : null}</span></span>
     </div>))}</div>;
 }
 export function Columns({ data, height = 190, color = "#4fa89f", log = false, fmt = nfmt }: { data: { label: string; value: number; color?: string }[]; height?: number; color?: string; log?: boolean; fmt?: (n: number) => string }) {
+  const [ref, W] = useBox();
   if (!data.length) return <Empty />;
-  const W = 640, P = { l: 44, r: 8, t: 8, b: 30 }, f = (v: number) => (log ? Math.log10(v + 1) : v), mx = Math.max(1e-9, ...data.map((d) => f(d.value))), bw = (W - P.l - P.r) / data.length;
+  const P = { l: 44, r: 8, t: 8, b: 30 }, f = (v: number) => (log ? Math.log10(v + 1) : v), mx = Math.max(1e-9, ...data.map((d) => f(d.value))), bw = (W - P.l - P.r) / data.length;
   const ticks = log ? [0, 1, 2, 3, 4, 5, 6, 7].filter((t) => t <= mx + 0.01).map((t) => ({ v: t, label: nfmt(10 ** t - 1) })) : niceTicks(0, mx, 4).map((t) => ({ v: t, label: fmt(t) }));
-  const Y = (v: number) => P.t + (1 - v / mx) * (height - P.t - P.b);
-  return <svg viewBox={`0 0 ${W} ${height}`} className="w-full h-auto">
-    {ticks.map((t) => <g key={t.v}><line x1={P.l} x2={W - P.r} y1={Y(t.v)} y2={Y(t.v)} stroke={GRID} /><text x={P.l - 5} y={Y(t.v) + 3.5} textAnchor="end" fontSize={10.5} fill={AX}>{t.label}</text></g>)}
+  const Y = (v: number) => P.t + (1 - v / mx) * (height - P.t - P.b), stride = Math.max(1, Math.ceil((maxTextWidth(data.map((d) => d.label), 11, 120) + 8) / bw));
+  return <div ref={ref}><svg viewBox={`0 0 ${W} ${height}`} width={W} height={height} className="block">
+    {ticks.map((t) => <g key={t.v}><line x1={P.l} x2={W - P.r} y1={Y(t.v)} y2={Y(t.v)} stroke={GRID} /><text x={P.l - 5} y={Y(t.v) + 3.5} textAnchor="end" fontSize={11} fill={AX}>{t.label}</text></g>)}
     {data.map((d, i) => <g key={i}><rect x={P.l + i * bw + bw * 0.1} y={Y(f(d.value))} width={bw * 0.8} height={Math.max(0, height - P.b - Y(f(d.value)))} fill={d.color ?? color} fillOpacity={0.85} rx={2}><title>{d.label}: {nfmt(d.value)}</title></rect>
-      <text x={P.l + i * bw + bw / 2} y={height - 14} textAnchor="middle" fontSize={data.length > 14 ? 9 : 10.5} fill={AX}>{d.label}</text></g>)}
-  </svg>;
+      {(i % stride === 0 || i === data.length - 1 && stride === 1) && <text x={P.l + i * bw + bw / 2} y={height - 14} textAnchor="middle" fontSize={11} fill={AX}>{d.label}</text>}</g>)}
+  </svg></div>;
 }
 export function StackedBars({ rows, keys, height = 230, percent = true }: { rows: { label: string; values: Record<string, number> }[]; keys: string[]; height?: number; percent?: boolean }) {
+  const [ref, W] = useBox();
   if (!rows.length) return <Empty />;
-  const W = 640, P = { l: 40, r: 8, t: 8, b: 30 }, bw = (W - P.l - P.r) / rows.length;
+  const P = { l: 40, r: 8, t: 8, b: 30 }, bw = (W - P.l - P.r) / rows.length, stride = Math.max(1, Math.ceil((maxTextWidth(rows.map((r) => r.label), 11, 120) + 8) / bw));
   const tot = rows.map((r) => keys.reduce((s, k) => s + (r.values[k] ?? 0), 0) || 1), mx = percent ? 100 : Math.max(...tot), Y = (v: number) => P.t + (1 - v / mx) * (height - P.t - P.b);
-  return <div><svg viewBox={`0 0 ${W} ${height}`} className="w-full h-auto">
-    {niceTicks(0, mx, 4).map((t) => <g key={t}><line x1={P.l} x2={W - P.r} y1={Y(t)} y2={Y(t)} stroke={GRID} /><text x={P.l - 5} y={Y(t) + 3.5} textAnchor="end" fontSize={10.5} fill={AX}>{percent ? t + "%" : nfmt(t)}</text></g>)}
+  return <div ref={ref}><svg viewBox={`0 0 ${W} ${height}`} width={W} height={height} className="block">
+    {niceTicks(0, mx, 4).map((t) => <g key={t}><line x1={P.l} x2={W - P.r} y1={Y(t)} y2={Y(t)} stroke={GRID} /><text x={P.l - 5} y={Y(t) + 3.5} textAnchor="end" fontSize={11} fill={AX}>{percent ? t + "%" : nfmt(t)}</text></g>)}
     {rows.map((r, i) => { let acc = 0; return <g key={i}>{keys.map((k, ki) => { const v = ((r.values[k] ?? 0) / (percent ? tot[i] : 1)) * (percent ? 100 : 1), y1 = Y(acc + v), y0 = Y(acc); acc += v; return <rect key={k} x={P.l + i * bw + bw * 0.08} y={y1} width={bw * 0.84} height={Math.max(0, y0 - y1)} fill={PAL[ki % PAL.length]} fillOpacity={0.85}><title>{r.label} · {k}: {nfmt(r.values[k] ?? 0)}</title></rect>; })}
-      <text x={P.l + i * bw + bw / 2} y={height - 14} textAnchor="middle" fontSize={rows.length > 14 ? 9 : 10.5} fill={AX}>{r.label}</text></g>; })}
+      {i % stride === 0 && <text x={P.l + i * bw + bw / 2} y={height - 14} textAnchor="middle" fontSize={11} fill={AX}>{r.label}</text>}</g>; })}
   </svg><Legend items={keys.map((k, i) => ({ name: k, color: PAL[i % PAL.length] }))} /></div>;
 }
 
@@ -172,10 +176,11 @@ export function Heatmap({ rows, cols, values, fmt = (v: number) => v.toFixed(2),
     if (scheme === "div") { const m = 0.5; return t < m ? `rgba(90,160,184,${0.15 + (m - t) / m * 0.75})` : `rgba(232,120,46,${0.15 + (t - m) / (1 - m) * 0.75})`; }
     return `rgba(79,168,159,${0.08 + t * 0.85})`;
   };
+  const rw = Math.min(300, Math.max(rowW, maxTextWidth(rows, 11.5, 300) + 12)), colMax = maxTextWidth(cols, 10.5, 200), vertical = colMax > cell - 4, headH = vertical ? colMax + 10 : 26;
   return (
-    <div className="overflow-x-auto"><div style={{ display: "grid", gridTemplateColumns: `${rowW}px repeat(${cols.length}, ${cell}px)`, gap: 1, minWidth: rowW + cols.length * (cell + 1) }}>
-      <div />{cols.map((c, j) => <div key={j} className="text-[10.5px] text-white/45 px-0.5 leading-tight flex items-end justify-center text-center" style={{ height: 44, wordBreak: "keep-all" }} title={c}>{c.length > 8 ? c.slice(0, 7) + "…" : c}</div>)}
-      {rows.map((r, i) => (<><div key={"r" + i} className="text-[11.5px] text-white/70 truncate pr-1 leading-[28px]" title={r}>{r}</div>{cols.map((_, j) => { const v = values[i]?.[j] ?? 0, fl = flag?.(i, j); return <div key={i + "-" + j} title={`${r} × ${cols[j]}: ${fmt(v)}`} className="text-[10px] text-center tabular-nums leading-[28px] rounded-[3px] text-white/80" style={{ height: 28, background: color(v), outline: fl ? "1.5px solid #ffd24a" : "none" }}>{cell >= 30 ? fmt(v) : ""}</div>; })}</>))}
+    <div className="overflow-x-auto"><div style={{ display: "grid", gridTemplateColumns: `${rw}px repeat(${cols.length}, ${cell}px)`, gap: 1, minWidth: rw + cols.length * (cell + 1) }}>
+      <div />{cols.map((c, j) => <div key={j} className="text-[10.5px] text-white/50 flex items-end justify-center" style={{ height: headH }} title={c}>{vertical ? <span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", whiteSpace: "nowrap" }}>{c}</span> : <span className="text-center leading-tight">{c}</span>}</div>)}
+      {rows.map((r, i) => (<><div key={"r" + i} className="text-[11.5px] text-white/70 pr-1 leading-[15px] flex items-center break-words" style={{ minHeight: 28 }} title={r}>{r}</div>{cols.map((_, j) => { const v = values[i]?.[j] ?? 0, fl = flag?.(i, j); return <div key={i + "-" + j} title={`${r} × ${cols[j]}: ${fmt(v)}`} className="text-[10px] text-center tabular-nums rounded-[3px] text-white/80 flex items-center justify-center" style={{ minHeight: 28, background: color(v), outline: fl ? "1.5px solid #ffd24a" : "none" }}>{cell >= 30 ? fmt(v) : ""}</div>; })}</>))}
     </div></div>
   );
 }
@@ -183,7 +188,7 @@ export function Heatmap({ rows, cols, values, fmt = (v: number) => v.toFixed(2),
 // ─────────── 산점도 ───────────
 export interface Pt { x: number; y: number; c?: number; label?: string; r?: number; hi?: boolean }
 export function Scatter({ points, height = 300, xLog = false, yLog = false, xLabel = "", yLabel = "", colors = PAL, legend, xFmt = nfmt, yFmt = nfmt, onPick }: { points: Pt[]; height?: number; xLog?: boolean; yLog?: boolean; xLabel?: string; yLabel?: string; colors?: string[]; legend?: { name: string; color: string }[]; xFmt?: (n: number) => string; yFmt?: (n: number) => string; onPick?: (p: Pt) => void }) {
-  const W = 640, P = { l: 48, r: 10, t: 10, b: 34 };
+  const [boxRef, W] = useBox(), P = { l: 48, r: 10, t: 10, b: 34 };
   const [hov, setHov] = useState<Pt | null>(null);
   if (!points.length) return <Empty />;
   const fx = (v: number) => (xLog ? Math.log10(Math.max(0, v) + 1) : v), fy = (v: number) => (yLog ? Math.log10(Math.max(0, v) + 1) : v);
@@ -191,14 +196,14 @@ export function Scatter({ points, height = 300, xLog = false, yLog = false, xLab
   const X = (v: number) => P.l + ((fx(v) - xa) / Math.max(1e-9, xb - xa)) * (W - P.l - P.r), Y = (v: number) => P.t + (1 - (fy(v) - ya) / Math.max(1e-9, yb - ya)) * (height - P.t - P.b);
   const tk = (lo: number, hi: number, lg: boolean) => (lg ? [0, 1, 2, 3, 4, 5, 6].filter((t) => t >= lo - 0.01 && t <= hi + 0.01).map((t) => ({ pos: t, label: nfmt(10 ** t - 1) })) : niceTicks(lo, hi, 5).map((t) => ({ pos: t, label: nfmt(t) })));
   return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${height}`} className="w-full h-auto" onMouseLeave={() => setHov(null)}>
+    <div ref={boxRef}>
+      <svg viewBox={`0 0 ${W} ${height}`} width={W} height={height} className="block" onMouseLeave={() => setHov(null)}>
         {tk(ya, yb, yLog).map((t) => { const y = P.t + (1 - (t.pos - ya) / Math.max(1e-9, yb - ya)) * (height - P.t - P.b); return <g key={"y" + t.pos}><line x1={P.l} x2={W - P.r} y1={y} y2={y} stroke={GRID} /><text x={P.l - 5} y={y + 3.5} textAnchor="end" fontSize={10.5} fill={AX}>{t.label}</text></g>; })}
         {tk(xa, xb, xLog).map((t) => { const x = P.l + ((t.pos - xa) / Math.max(1e-9, xb - xa)) * (W - P.l - P.r); return <g key={"x" + t.pos}><line x1={x} x2={x} y1={P.t} y2={height - P.b} stroke={GRID} /><text x={x} y={height - P.b + 14} textAnchor="middle" fontSize={10.5} fill={AX}>{t.label}</text></g>; })}
-        <text x={W / 2} y={height - 4} textAnchor="middle" fontSize={11} fill={AX}>{xLabel}</text><text x={10} y={height / 2} fontSize={11} fill={AX} transform={`rotate(-90 10 ${height / 2})`} textAnchor="middle">{yLabel}</text>
+        <text x={W / 2} y={height - 4} textAnchor="middle" fontSize={11} fill={AX}>{xLabel}</text><text x={13} y={height / 2} fontSize={11} fill={AX} transform={`rotate(-90 13 ${height / 2})`} textAnchor="middle">{yLabel}</text>
         {points.map((p, i) => <circle key={i} cx={X(p.x)} cy={Y(p.y)} r={p.r ?? (p.hi ? 4.5 : 3)} fill={colors[(p.c ?? 0) % colors.length]} fillOpacity={p.hi ? 1 : 0.62} stroke={p.hi ? "#fff" : "none"} strokeWidth={1.2} onMouseEnter={() => setHov(p)} onClick={() => onPick?.(p)} style={{ cursor: onPick ? "pointer" : "default" }} />)}
       </svg>
-      <div className="min-h-[18px] text-[12px] text-white/60 truncate">{hov?.label ?? " "}</div>
+      <div className="min-h-[18px] text-[12px] text-white/60 break-words">{hov?.label ?? " "}</div>
       {legend && <Legend items={legend} />}
     </div>
   );
@@ -224,16 +229,18 @@ function squarify(items: { v: number; i: number }[], x: number, y: number, w: nu
   return out;
 }
 export function Treemap({ root, height = 300 }: { root: TNode; height?: number }) {
-  const W = 640, top = root.children ?? [];
+  const [ref, W] = useBox();
+  const top = root.children ?? [];
   if (!top.length) return <Empty />;
   const L1 = squarify(top.map((c, i) => ({ v: c.value, i })), 0, 0, W, height);
-  return <svg viewBox={`0 0 ${W} ${height}`} className="w-full h-auto">{L1.map((r) => {
-    const n = top[r.i], kids = n.children ?? [], L2 = kids.length ? squarify(kids.map((c, i) => ({ v: c.value, i })), r.x + 2, r.y + 15, r.w - 4, r.h - 17) : [];
-    return <g key={r.i}><rect x={r.x + 1} y={r.y + 1} width={r.w - 2} height={r.h - 2} fill={PAL[r.i % PAL.length]} fillOpacity={0.18} stroke={PAL[r.i % PAL.length]} strokeOpacity={0.6} rx={3} />
-      {r.w > 60 && <text x={r.x + 6} y={r.y + 12} fontSize={10.5} fill="#fff" fillOpacity={0.9}>{n.name.length > r.w / 6.5 ? n.name.slice(0, Math.floor(r.w / 6.5)) + "…" : n.name}</text>}
-      {L2.map((k) => <g key={k.i}><rect x={k.x} y={k.y} width={Math.max(0, k.w - 1)} height={Math.max(0, k.h - 1)} fill={PAL[r.i % PAL.length]} fillOpacity={0.55} rx={2}><title>{n.name} › {kids[k.i].name}: {nfmt(kids[k.i].value)}편</title></rect>
-        {k.w > 54 && k.h > 14 && <text x={k.x + 3} y={k.y + 11} fontSize={9.5} fill="#fff" fillOpacity={0.9}>{kids[k.i].name.slice(0, Math.floor(k.w / 5.6))}</text>}</g>)}</g>;
-  })}</svg>;
+  return <div ref={ref}><svg viewBox={`0 0 ${W} ${height}`} width={W} height={height} className="block">{L1.map((r) => {
+    const n = top[r.i], kids = n.children ?? [], head = r.w > 60 ? wrapText(n.name, r.w - 12, 11, 2) : [], hh = head.length ? head.length * 13 + 4 : 2;
+    const L2 = kids.length ? squarify(kids.map((c, i) => ({ v: c.value, i })), r.x + 2, r.y + hh, r.w - 4, r.h - hh - 2) : [];
+    return <g key={r.i}><rect x={r.x + 1} y={r.y + 1} width={r.w - 2} height={r.h - 2} fill={PAL[r.i % PAL.length]} fillOpacity={0.18} stroke={PAL[r.i % PAL.length]} strokeOpacity={0.6} rx={3}><title>{n.name}: {nfmt(n.value)}편</title></rect>
+      {head.length > 0 && <text x={r.x + 6} y={r.y + 13} fontSize={11} fill="#fff" fillOpacity={0.92} fontWeight={600}>{head.map((l, i) => <tspan key={i} x={r.x + 6} dy={i ? 13 : 0}>{l}</tspan>)}</text>}
+      {L2.map((k) => { const nm = kids[k.i].name, fit = Math.max(0, Math.floor((k.h - 4) / 12)), ln = k.w > 36 && fit > 0 ? wrapText(nm, k.w - 6, 10.5, fit) : [], cut = ln.some((l) => l.endsWith("…")); return <g key={k.i}><rect x={k.x} y={k.y} width={Math.max(0, k.w - 1)} height={Math.max(0, k.h - 1)} fill={PAL[r.i % PAL.length]} fillOpacity={0.55} rx={2}><title>{n.name} › {nm}: {nfmt(kids[k.i].value)}편</title></rect>
+        {ln.length > 0 && !cut && <text x={k.x + 3} y={k.y + 11} fontSize={10.5} fill="#fff" fillOpacity={0.92}>{ln.map((l, i) => <tspan key={i} x={k.x + 3} dy={i ? 12 : 0}>{l}</tspan>)}</text>}</g>; })}</g>;
+  })}</svg><Legend items={top.map((c, i) => ({ name: `${c.name} (${nfmt(c.value)})`, color: PAL[i % PAL.length] }))} /></div>;
 }
 export function Sunburst({ root, size = 360 }: { root: TNode; size?: number }) {
   const [hl, setHl] = useState<string>("");
@@ -257,45 +264,51 @@ export function Sunburst({ root, size = 360 }: { root: TNode; size?: number }) {
   const cur = arcs.find((a) => a.key === hl);
   return <div className="flex flex-col items-center"><svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[420px] h-auto">
     {arcs.map((a) => <path key={a.key} d={a.path} fill={a.color} fillOpacity={hl && !a.key.startsWith(hl) && !hl.startsWith(a.key) ? 0.18 : 0.35 + a.ring * 0.14} stroke="#13161e" strokeWidth={0.6} onMouseEnter={() => setHl(a.key)} onMouseLeave={() => setHl("")}><title>{a.name}: {nfmt(a.v)}편</title></path>)}
-    <text x={cx} y={cy - 4} textAnchor="middle" fontSize={12} fill="#fff" fillOpacity={0.9}>{cur ? (cur.name.length > 18 ? cur.name.slice(0, 17) + "…" : cur.name) : "영역 → 분야"}</text><text x={cx} y={cy + 12} textAnchor="middle" fontSize={11} fill={AX}>{cur ? nfmt(cur.v) + "편" : "→ 세부분야 → 주제"}</text></svg></div>;
+    {(() => { const ls = wrapText(cur ? cur.name : "영역 → 분야", rw * 1.2, 11, 3); return <><Lines x={cx} y={cy - 12 - (ls.length - 1) * 6.5} lines={ls} lh={13} anchor="middle" opacity={0.92} size={11} /><text x={cx} y={cy + 14 + (ls.length - 1) * 6.5 + 8} textAnchor="middle" fontSize={11} fill={AX}>{cur ? nfmt(cur.v) + "편" : "→ 세부분야 → 주제"}</text></>; })()}</svg></div>;
 }
 
 // ─────────── 샌키(주제 변천) ───────────
 export function Sankey({ nodes, links, periods, height = 380 }: { nodes: { id: string; period: number; label: string; size: number; status: string }[]; links: { source: string; target: string; value: number }[]; periods: string[]; height?: number }) {
-  const W = 700, colW = 14, P = { l: 6, r: 6, t: 26, b: 8 };
+  const [ref, W] = useBox(420, 700), colW = 14, labW = Math.min(190, Math.max(110, Math.round(W * 0.26))), P = { l: 6, r: 6, t: 26, b: 8 };
   const [hl, setHl] = useState<string | null>(null);
+  const stat = (s: string) => (s === "신규" ? "#e8782e" : s === "소멸" ? "#8e5c70" : s === "분기" ? "#d3a53f" : s === "합류" ? "#7b93c9" : "#4fa89f");
+  const span = Math.max(1, periods.length - 1), colX = (p: number) => P.l + (p * (W - P.l - P.r - colW - labW)) / span, step = periods.length > 1 ? (W - P.l - P.r - colW - labW) / span : labW;
+  const lw = Math.max(90, Math.min(labW, step - colW - 14));
   const L = useMemo(() => {
-    const per = periods.map((_, p) => nodes.filter((n) => n.period === p).sort((a, b) => b.size - a.size));
-    const maxCol = Math.max(1, ...per.map((l) => l.reduce((s, n) => s + n.size, 0))), usable = height - P.t - P.b, gap = 8;
-    const pos = new Map<string, { x: number; y: number; h: number; n: (typeof nodes)[number] }>(), colX = (p: number) => P.l + (p * (W - P.l - P.r - colW - 130)) / Math.max(1, periods.length - 1);
-    per.forEach((l, p) => { const avail = usable - gap * Math.max(0, l.length - 1), sc = Math.min(avail / maxCol, avail / Math.max(1, l.reduce((s, n) => s + n.size, 0))); let y = P.t; l.forEach((n) => { const h = Math.max(6, n.size * sc); pos.set(n.id, { x: colX(p), y, h, n }); y += h + gap; }); });
-    return pos;
-  }, [nodes, periods, height]);
+    const per = periods.map((_, p) => nodes.filter((n) => n.period === p).sort((a, b) => b.size - a.size)), gap = 8;
+    const lab = new Map(nodes.map((n) => [n.id, wrapText(n.label, lw, 11, 3)])), minH = (n: (typeof nodes)[number]) => ((lab.get(n.id)?.length ?? 1) + 1) * 13;
+    const maxCol = Math.max(1, ...per.map((l) => l.reduce((s, n) => s + n.size, 0))), usable0 = height - P.t - P.b;
+    const sc = usable0 / (maxCol * 1.15), pos = new Map<string, { x: number; y: number; h: number; n: (typeof nodes)[number]; lines: string[] }>();
+    let used = 0;
+    per.forEach((l, p) => { let y = P.t; l.forEach((n) => { const h = Math.max(minH(n), n.size * sc); pos.set(n.id, { x: colX(p), y, h, n, lines: lab.get(n.id)! }); y += h + gap; }); used = Math.max(used, y); });
+    return { pos, H: Math.max(height, used + P.b) };
+  }, [nodes, periods, height, W, lw]);
   if (!nodes.length) return <Empty />;
   const out = new Map<string, number>(), inn = new Map<string, number>();
-  const stat = (s: string) => (s === "신규" ? "#e8782e" : s === "소멸" ? "#8e5c70" : s === "분기" ? "#d3a53f" : s === "합류" ? "#7b93c9" : "#4fa89f");
-  return <svg viewBox={`0 0 ${W} ${height}`} className="w-full h-auto">
-    {periods.map((p, i) => { const x = P.l + (i * (W - P.l - P.r - colW - 130)) / Math.max(1, periods.length - 1); return <text key={p} x={x} y={14} fontSize={11} fill="#fff" fillOpacity={0.7}>{p}</text>; })}
-    {links.map((l, i) => { const a = L.get(l.source), b = L.get(l.target); if (!a || !b) return null; const ha = (l.value / Math.max(1, a.n.size)) * a.h * 0.9 + 1.5, hb = (l.value / Math.max(1, b.n.size)) * b.h * 0.9 + 1.5; const oa = out.get(l.source) ?? 0, ob = inn.get(l.target) ?? 0; out.set(l.source, oa + ha); inn.set(l.target, ob + hb);
+  return <div ref={ref}><svg viewBox={`0 0 ${W} ${L.H}`} width={W} height={L.H} className="block">
+    {periods.map((p, i) => <text key={p} x={colX(i)} y={14} fontSize={11} fill="#fff" fillOpacity={0.7}>{p}</text>)}
+    {links.map((l, i) => { const a = L.pos.get(l.source), b = L.pos.get(l.target); if (!a || !b) return null; const ha = (l.value / Math.max(1, a.n.size)) * a.h * 0.9 + 1.5, hb = (l.value / Math.max(1, b.n.size)) * b.h * 0.9 + 1.5; const oa = out.get(l.source) ?? 0, ob = inn.get(l.target) ?? 0; out.set(l.source, oa + ha); inn.set(l.target, ob + hb);
       const y0 = a.y + oa + ha / 2, y1 = b.y + ob + hb / 2, x0 = a.x + colW, x1 = b.x, mx = (x0 + x1) / 2, on = !hl || hl === l.source || hl === l.target;
       return <path key={i} d={`M${x0} ${y0}C${mx} ${y0} ${mx} ${y1} ${x1} ${y1}`} fill="none" stroke={stat(b.n.status)} strokeOpacity={on ? 0.5 : 0.08} strokeWidth={Math.max(1.5, (ha + hb) / 2)} />; })}
-    {[...L.values()].map(({ x, y, h, n }) => <g key={n.id} onMouseEnter={() => setHl(n.id)} onMouseLeave={() => setHl(null)}><rect x={x} y={y} width={colW} height={h} rx={2} fill={stat(n.status)} fillOpacity={0.9}><title>{n.label} · {n.status} · 노드 {n.size}</title></rect>
-      <text x={x + colW + 4} y={y + Math.min(h, 14) - 2} fontSize={10.5} fill="#fff" fillOpacity={0.85}>{n.label.length > 22 ? n.label.slice(0, 21) + "…" : n.label}</text><text x={x + colW + 4} y={y + Math.min(h, 14) + 10} fontSize={9.5} fill={stat(n.status)}>{n.status}</text></g>)}
-  </svg>;
+    {[...L.pos.values()].map(({ x, y, h, n, lines }) => <g key={n.id} onMouseEnter={() => setHl(n.id)} onMouseLeave={() => setHl(null)}><rect x={x} y={y} width={colW} height={h} rx={2} fill={stat(n.status)} fillOpacity={0.9}><title>{n.label} · {n.status} · 노드 {n.size}</title></rect>
+      <text x={x + colW + 5} y={y + 10} fontSize={11} fill="#fff" fillOpacity={0.88}>{lines.map((l, i) => <tspan key={i} x={x + colW + 5} dy={i ? 13 : 0}>{l}</tspan>)}<tspan x={x + colW + 5} dy={13} fill={stat(n.status)} fontSize={10.5}>{n.status}</tspan></text></g>)}
+  </svg></div>;
 }
 
 // ─────────── UpSet ───────────
 export function UpSet({ sets, items, label }: { sets: string[]; items: { sets: string[]; n: number }[]; label: Record<string, string> }) {
+  const [ref, W] = useBox(420, 640);
   const top = items.slice(0, 16);
   if (!top.length) return <Empty />;
-  const W = 640, rowH = 22, H = 120 + sets.length * rowH, colW = (W - 150) / top.length, mx = Math.max(...top.map((t) => t.n));
-  return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-    {top.map((t, i) => { const h = (t.n / mx) * 90, x = 150 + i * colW + colW * 0.15; return <g key={i}><rect x={x} y={100 - h} width={colW * 0.7} height={h} fill="#4fa89f" fillOpacity={0.8} rx={2} /><text x={x + colW * 0.35} y={96 - h} textAnchor="middle" fontSize={9.5} fill="#fff" fillOpacity={0.7}>{nfmt(t.n)}</text></g>; })}
-    {sets.map((s, r) => <g key={s}><text x={140} y={120 + r * rowH + 15} textAnchor="end" fontSize={11} fill="#fff" fillOpacity={0.7}>{label[s] ?? s}</text>
-      {top.map((t, i) => { const cx = 150 + i * colW + colW * 0.5, cy = 120 + r * rowH + 11, on = t.sets.includes(s); return <circle key={i} cx={cx} cy={cy} r={5} fill={on ? "#e8782e" : "#ffffff"} fillOpacity={on ? 0.95 : 0.1} />; })}</g>)}
-    {top.map((t, i) => { const idx = sets.map((s, r) => (t.sets.includes(s) ? r : -1)).filter((r) => r >= 0); if (idx.length < 2) return null; const cx = 150 + i * colW + colW * 0.5; return <line key={"l" + i} x1={cx} x2={cx} y1={120 + Math.min(...idx) * rowH + 11} y2={120 + Math.max(...idx) * rowH + 11} stroke="#e8782e" strokeWidth={2.2} />; })}
-    {top.some((t) => t.sets.length === 0) && <text x={150} y={H - 4} fontSize={10} fill={AX}>(아무 색인에도 없는 논문 포함)</text>}
-  </svg>;
+  const left = Math.min(Math.round(W * 0.34), maxTextWidth(sets.map((x) => label[x] ?? x), 11, 220) + 18), rowH = 22, H = 120 + sets.length * rowH, colW = (W - left - 8) / top.length, mx = Math.max(...top.map((t) => t.n)), nl = (n: number) => nfmt(n);
+  const showNum = colW >= textWidth("9.9만", 10) + 4;
+  return <div ref={ref}><svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block">
+    {top.map((t, i) => { const h = (t.n / mx) * 76, x = left + i * colW + colW * 0.15; return <g key={i}><rect x={x} y={100 - h} width={colW * 0.7} height={h} fill="#4fa89f" fillOpacity={0.8} rx={2}><title>{t.sets.map((x2) => label[x2] ?? x2).join(" + ") || "(없음)"}: {t.n.toLocaleString("ko-KR")}편</title></rect>{(showNum || i % 2 === 0) && <text x={x + colW * 0.35} y={96 - h} textAnchor="middle" fontSize={10} fill="#fff" fillOpacity={0.72}>{nl(t.n)}</text>}</g>; })}
+    {sets.map((s2, r) => <g key={s2}><text x={left - 10} y={120 + r * rowH + 15} textAnchor="end" fontSize={11} fill="#fff" fillOpacity={0.75}>{label[s2] ?? s2}</text>
+      {top.map((t, i) => { const cx = left + i * colW + colW * 0.5, cy = 120 + r * rowH + 11, on = t.sets.includes(s2); return <circle key={i} cx={cx} cy={cy} r={5} fill={on ? "#e8782e" : "#ffffff"} fillOpacity={on ? 0.95 : 0.1} />; })}</g>)}
+    {top.map((t, i) => { const idx = sets.map((s2, r) => (t.sets.includes(s2) ? r : -1)).filter((r) => r >= 0); if (idx.length < 2) return null; const cx = left + i * colW + colW * 0.5; return <line key={"l" + i} x1={cx} x2={cx} y1={120 + Math.min(...idx) * rowH + 11} y2={120 + Math.max(...idx) * rowH + 11} stroke="#e8782e" strokeWidth={2.2} />; })}
+    {top.some((t) => t.sets.length === 0) && <text x={left} y={H - 4} fontSize={10.5} fill={AX}>(아무 색인에도 없는 논문 포함)</text>}
+  </svg></div>;
 }
 
 // ─────────── 타일 지도(국가) ───────────
@@ -318,9 +331,10 @@ export function TileMap({ values, fmt = nfmt, names, lo = 0 }: { values: Map<str
 
 // ─────────── 코드(chord) ───────────
 export function Chord({ names, matrix, size = 420 }: { names: string[]; matrix: number[][]; size?: number }) {
-  const [hl, setHl] = useState(-1);
+  const [hl, setHl] = useState(-1), [ref, boxW] = useBox(300, size);
   const n = names.length; if (!n) return <Empty />;
-  const tot = matrix.map((r) => r.reduce((s, v) => s + v, 0)), all = tot.reduce((s, v) => s + v, 0) || 1, R = size / 2 - 40, cx = size / 2, cy = size / 2, gap = 0.03;
+  const S = Math.min(boxW, 520), labW = maxTextWidth(names, 11, 140) + 14, R = Math.max(60, S / 2 - labW - 6), cx = S / 2, cy = S / 2, H = Math.max(S, 2 * (R + 30));
+  const tot = matrix.map((r) => r.reduce((s2, v) => s2 + v, 0)), all = tot.reduce((s2, v) => s2 + v, 0) || 1, gap = 0.03;
   let a = 0; const arcs = tot.map((t) => { const span = (t / all) * (Math.PI * 2 - gap * n); const r = { a0: a, a1: a + span }; a += span + gap; return r; });
   const P = (r: number, ang: number) => [cx + r * Math.cos(ang - Math.PI / 2), cy + r * Math.sin(ang - Math.PI / 2)];
   const used = arcs.map((x) => x.a0), ribbons: React.ReactElement[] = [];
@@ -331,22 +345,27 @@ export function Chord({ names, matrix, size = 420 }: { names: string[]; matrix: 
     const [x0, y0] = P(R - 4, ai0), [x1, y1] = P(R - 4, ai1), [x2, y2] = P(R - 4, aj0), [x3, y3] = P(R - 4, aj1);
     ribbons.push(<path key={i + "-" + j} d={`M${x0} ${y0}A${R - 4} ${R - 4} 0 0 1 ${x1} ${y1}Q${cx} ${cy} ${x2} ${y2}A${R - 4} ${R - 4} 0 0 1 ${x3} ${y3}Q${cx} ${cy} ${x0} ${y0}Z`} fill={PAL[i % PAL.length]} fillOpacity={hl < 0 ? 0.42 : hl === i || hl === j ? 0.7 : 0.06}><title>{names[i]} ↔ {names[j]}: {v}편</title></path>);
   }
-  return <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[460px] h-auto mx-auto">
+  // 라벨: 원 바깥쪽에 놓되 좌우 방향에 맞춰 정렬하고, 위아래로 겹치면 밀어 편다
+  const mids = arcs.map((r) => (r.a0 + r.a1) / 2), pos = mids.map((m) => P(R + 14, m)), left = pos.map(([x]) => x < cx - 2);
+  const ys = [0, 1].map((side) => { const idx = pos.map((_, i) => i).filter((i) => (left[i] ? 0 : 1) === side); const adj = spread(idx.map((i) => pos[i][1]), idx.map(() => 13), 6, H - 6, 1); return new Map(idx.map((i, k) => [i, adj[k]])); });
+  return <div ref={ref}><svg viewBox={`0 0 ${S} ${H}`} width={S} height={H} className="block mx-auto">
     {ribbons}
-    {arcs.map((r, i) => { const [x0, y0] = P(R, r.a0), [x1, y1] = P(R, r.a1), large = r.a1 - r.a0 > Math.PI ? 1 : 0, [tx, ty] = P(R + 14, (r.a0 + r.a1) / 2); return <g key={i} onMouseEnter={() => setHl(i)} onMouseLeave={() => setHl(-1)}><path d={`M${x0} ${y0}A${R} ${R} 0 ${large} 1 ${x1} ${y1}`} stroke={PAL[i % PAL.length]} strokeWidth={9} fill="none" /><text x={tx} y={ty + 3.5} textAnchor="middle" fontSize={10.5} fill="#fff" fillOpacity={0.85}>{names[i]}</text></g>; })}
-  </svg>;
+    {arcs.map((r, i) => { const [x0, y0] = P(R, r.a0), [x1, y1] = P(R, r.a1), large = r.a1 - r.a0 > Math.PI ? 1 : 0, [tx] = pos[i], ty = ys[left[i] ? 0 : 1].get(i) ?? pos[i][1]; return <g key={i} onMouseEnter={() => setHl(i)} onMouseLeave={() => setHl(-1)}><path d={`M${x0} ${y0}A${R} ${R} 0 ${large} 1 ${x1} ${y1}`} stroke={PAL[i % PAL.length]} strokeWidth={9} fill="none" /><text x={tx} y={ty + 3.5} textAnchor={left[i] ? "end" : "start"} fontSize={11} fill="#fff" fillOpacity={0.88}>{names[i]}</text></g>; })}
+  </svg></div>;
 }
 
 // ─────────── 포레스트(회귀 계수) ───────────
 export function Forest({ rows }: { rows: { label: string; coef: number; se: number }[] }) {
+  const [ref, W] = useBox(360, 640);
   if (!rows.length) return <Empty />;
-  const W = 640, rh = 26, P = { l: 190, r: 16, t: 6, b: 22 }, H = P.t + P.b + rows.length * rh;
+  const lw = Math.min(Math.round(W * 0.46), maxTextWidth(rows.map((r) => r.label), 11, 320) + 4), P = { l: lw + 14, r: 18, t: 6, b: 24 }, lay = rows.map((r) => wrapText(r.label, lw, 11, 3)), rhs = lay.map((l) => Math.max(26, l.length * 13 + 10));
+  const ys: number[] = []; rhs.reduce((acc, h) => { ys.push(acc + h / 2); return acc + h; }, P.t); const H = P.t + P.b + rhs.reduce((s2, h) => s2 + h, 0);
   const lo = Math.min(...rows.map((r) => r.coef - 1.96 * r.se), 0), hi = Math.max(...rows.map((r) => r.coef + 1.96 * r.se), 0), X = (v: number) => P.l + ((v - lo) / Math.max(1e-9, hi - lo)) * (W - P.l - P.r);
-  return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
+  return <div ref={ref}><svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block">
     <line x1={X(0)} x2={X(0)} y1={P.t} y2={H - P.b} stroke="rgba(255,255,255,0.35)" strokeDasharray="3 3" />
-    {niceTicks(lo, hi, 5).map((t) => <text key={t} x={X(t)} y={H - 6} textAnchor="middle" fontSize={10} fill={AX}>{t.toFixed(2)}</text>)}
-    {rows.map((r, i) => { const y = P.t + i * rh + rh / 2, sig = Math.abs(r.coef) > 1.96 * r.se; return <g key={i}><text x={P.l - 8} y={y + 4} textAnchor="end" fontSize={11} fill="#fff" fillOpacity={0.75}>{r.label}</text><line x1={X(r.coef - 1.96 * r.se)} x2={X(r.coef + 1.96 * r.se)} y1={y} y2={y} stroke={r.coef >= 0 ? "#e8782e" : "#5aa0b8"} strokeWidth={2} /><circle cx={X(r.coef)} cy={y} r={4.5} fill={sig ? (r.coef >= 0 ? "#e8782e" : "#5aa0b8") : "#8a98a0"}><title>{r.label}: {r.coef.toFixed(3)} ± {(1.96 * r.se).toFixed(3)}</title></circle></g>; })}
-  </svg>;
+    {niceTicks(lo, hi, Math.max(2, Math.floor((W - P.l) / 70))).map((t) => <text key={t} x={X(t)} y={H - 7} textAnchor="middle" fontSize={11} fill={AX}>{t.toFixed(2)}</text>)}
+    {rows.map((r, i) => { const y = ys[i], sig = Math.abs(r.coef) > 1.96 * r.se; return <g key={i}><Lines x={P.l - 10} y={y} lines={lay[i]} anchor="end" opacity={0.78} /><line x1={X(r.coef - 1.96 * r.se)} x2={X(r.coef + 1.96 * r.se)} y1={y} y2={y} stroke={r.coef >= 0 ? "#e8782e" : "#5aa0b8"} strokeWidth={2} /><circle cx={X(r.coef)} cy={y} r={4.5} fill={sig ? (r.coef >= 0 ? "#e8782e" : "#5aa0b8") : "#8a98a0"}><title>{r.label}: {r.coef.toFixed(3)} ± {(1.96 * r.se).toFixed(3)}</title></circle></g>; })}
+  </svg></div>;
 }
 
 // ─────────── 로렌츠 ───────────
@@ -364,13 +383,16 @@ export function Lorenz({ points }: { points: [number, number][] }) {
 
 // ─────────── 상자수염(가로) ───────────
 export function BoxRows({ items, fmt = (n: number) => n.toFixed(1) }: { items: { label: string; lo: number; q1: number; q2: number; q3: number; hi: number; n: number }[]; fmt?: (n: number) => string }) {
+  const [ref, W] = useBox(360, 640);
   if (!items.length) return <Empty />;
-  const W = 640, rh = 24, P = { l: 210, r: 16, t: 6, b: 22 }, H = P.t + P.b + items.length * rh, hi = Math.max(...items.map((i) => i.hi)), X = (v: number) => P.l + (v / Math.max(1e-9, hi)) * (W - P.l - P.r);
-  return <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto">
-    {niceTicks(0, hi, 5).map((t) => <g key={t}><line x1={X(t)} x2={X(t)} y1={P.t} y2={H - P.b} stroke={GRID} /><text x={X(t)} y={H - 6} textAnchor="middle" fontSize={10} fill={AX}>{t}</text></g>)}
-    {items.map((it, i) => { const y = P.t + i * rh + rh / 2; return <g key={i}><text x={P.l - 8} y={y + 4} textAnchor="end" fontSize={10.5} fill="#fff" fillOpacity={0.72}>{it.label.length > 30 ? it.label.slice(0, 29) + "…" : it.label} <tspan fill="#fff" fillOpacity={0.3}>({it.n})</tspan></text>
+  const lab = (i: { label: string; n: number }) => `${i.label} (${i.n})`, lw = Math.min(Math.round(W * 0.42), maxTextWidth(items.map(lab), 11, 300) + 4), P = { l: lw + 14, r: 18, t: 6, b: 24 };
+  const lay = items.map((i) => wrapText(lab(i), lw, 11, 3)), rhs = lay.map((l) => Math.max(26, l.length * 13 + 10)), ys: number[] = []; rhs.reduce((acc, h) => { ys.push(acc + h / 2); return acc + h; }, P.t);
+  const H = P.t + P.b + rhs.reduce((s2, h) => s2 + h, 0), hi = Math.max(...items.map((i) => i.hi)), X = (v: number) => P.l + (v / Math.max(1e-9, hi)) * (W - P.l - P.r);
+  return <div ref={ref}><svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block">
+    {niceTicks(0, hi, Math.max(2, Math.floor((W - P.l) / 70))).map((t) => <g key={t}><line x1={X(t)} x2={X(t)} y1={P.t} y2={H - P.b} stroke={GRID} /><text x={X(t)} y={H - 7} textAnchor="middle" fontSize={11} fill={AX}>{t}</text></g>)}
+    {items.map((it, i) => { const y = ys[i]; return <g key={i}><Lines x={P.l - 10} y={y} lines={lay[i]} anchor="end" opacity={0.75} />
       <line x1={X(it.lo)} x2={X(it.hi)} y1={y} y2={y} stroke="rgba(255,255,255,0.35)" /><rect x={X(it.q1)} y={y - 7} width={Math.max(1, X(it.q3) - X(it.q1))} height={14} fill={PAL[i % PAL.length]} fillOpacity={0.55} rx={2}><title>{it.label}: 최소 {fmt(it.lo)} · Q1 {fmt(it.q1)} · 중앙 {fmt(it.q2)} · Q3 {fmt(it.q3)} · 최대 {fmt(it.hi)}</title></rect><line x1={X(it.q2)} x2={X(it.q2)} y1={y - 7} y2={y + 7} stroke="#fff" strokeWidth={2} /></g>; })}
-  </svg>;
+  </svg></div>;
 }
 
 // ─────────── 흐름도(PRISMA) ───────────

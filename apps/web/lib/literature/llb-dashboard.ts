@@ -171,7 +171,8 @@ async function textSample(opts: any, n: number, withAbstract: boolean): Promise<
 }
 
 async function topicEvo(opts: any) {
-  const recs = (await textSample(opts, 4000, false)).filter((r) => r.year > 0);
+  // 관련도 순 상위는 거의 최근 논문뿐이라 시기를 나눌 수 없다 — 인용순 상위(오래된 논문부터 최근 논문까지 고르게 섞임)를 쓴다
+  const recs = (await textSample({ ...opts, sort: "cited" }, 4000, false)).filter((r) => r.year > 0);
   if (recs.length < 30) return { periods: [], nodes: [], links: [], note: "표본이 작아 계산할 수 없습니다" };
   const ys = recs.map((r) => r.year).sort((a, b) => a - b), K = Math.min(4, new Set(ys).size);
   const cuts = Array.from({ length: K }, (_, i) => ys[Math.min(ys.length - 1, Math.ceil((ys.length * (i + 1)) / K) - 1)]);

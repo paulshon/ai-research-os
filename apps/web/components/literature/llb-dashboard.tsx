@@ -13,6 +13,8 @@ import {
 import { Donut, Gauge, Lollipop } from "@/components/literature/viz2";
 import { PALETTES } from "@/lib/literature/viz-style";
 import DonutLoader from "@/components/literature/donut-loader";
+import { InterpContext } from "@/components/literature/guide-box";
+import { interpretSection, type InterpMap } from "@/lib/literature/interpret";
 import { ClusterRadar, CoverageWaffle, Cross, FieldBump, ImpactGauges, JournalRadar, Longi, OaDonut, TopicBump, TopicSlope, TypeDonut } from "@/components/literature/llb-dashboard-extra";
 
 type Sec = "trend" | "impact" | "journal" | "author" | "geo" | "topic_year" | "topic_evo" | "topic_rs" | "topic_map" | "topic_gap" | "funding" | "citation" | "model" | "quality" | "longitudinal" | "cross";
@@ -36,7 +38,7 @@ const GROUPS: { id: string; label: string; subs?: { id: Sec; label: string }[]; 
 const SECTION_HELP: Record<Sec, string> = {
   trend: "검색에 일치한 전체 논문을 SQL 로 집계합니다.", impact: "일치한 전체 논문의 인용을 집계합니다(인용 궤적은 연도 코호트 표본).", journal: "일치한 전체 논문의 저널·색인 정보를 집계합니다.",
   author: "저자 생산성은 일치 집합이 25만 편을 넘으면 해시 표본으로 계산합니다.", geo: "일치한 전체 논문의 국가·기관 정보를 집계합니다.", topic_year: "일치한 전체 논문의 주제 상위 24개를 연도별로 집계합니다.",
-  topic_evo: "순위 상위 최대 4,000편에서 연도 구간별 키워드 군집을 만들고, 이웃 구간의 군집을 구성원 겹침(Jaccard)으로 이어 신규·소멸·분기·합류를 판정합니다.",
+  topic_evo: "인용순 상위 최대 4,000편에서 연도 구간별 키워드 군집을 만들고, 이웃 구간의 군집을 구성원 겹침(Jaccard)으로 이어 신규·소멸·분기·합류를 판정합니다.",
   topic_rs: "순위 상위 최대 4,000편의 OpenAlex 개념으로 개념 간 거리(1−동시출현 코사인)를 만들고 논문마다 Rao–Stirling 다양성을 계산합니다.",
   topic_map: "상위 최대 1,800편의 제목·초록을 TF-IDF → 잠재 의미 분석(LSA) → k-means 로 묶어 2차원에 배치합니다(임베딩 모델이 아닌 통계 기반 근사).",
   topic_gap: "순위 상위 최대 4,000편 중 상위 주제 18개 × 연구 방법·대상 사전(제목+초록 검색)의 관측/기대 비율입니다. 기대보다 적은 칸이 공백 후보입니다.",
@@ -46,6 +48,7 @@ const SECTION_HELP: Record<Sec, string> = {
 };
 const YEAR_NOW = 2026;
 /** 한 번에 분석할 때의 호출 순서(가벼운 것 먼저, 텍스트·인용망 같은 무거운 것은 뒤) */
+const interpCache = new WeakMap<object, { key: string; map: InterpMap }>();
 const SEC_LABEL: Record<string, string> = { trend: "A 규모·동향", impact: "B 영향력", journal: "C 저널·출판", author: "D 저자·협력", geo: "E 기관·국가", funding: "G 재원·OA", quality: "J 품질·검색 설계", longitudinal: "K 종단 분석", cross: "L 횡단 분석", model: "I 통계 모델", topic_year: "F 주제 흐름", topic_evo: "F 주제 변천", topic_rs: "F 학제성", topic_map: "F 토픽·초록 지도", topic_gap: "F 연구 공백", citation: "H 인용 구조" };
 const ALL_SECS: Sec[] = ["trend", "impact", "journal", "author", "geo", "funding", "quality", "longitudinal", "cross", "model", "topic_year", "topic_evo", "topic_rs", "topic_map", "topic_gap", "citation"];
 const nf = new Intl.NumberFormat("ko-KR");
@@ -116,8 +119,12 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
   const D = cur?.data;
   const run = () => { if (q.trim()) { setStore({}); setErrs({}); setRunId((n) => n + 1); setCommitted(q.trim()); } };
 
-  const renderSec = (x: Sec, Dx: any) => (
-    <>
+  const renderSec = (x: Sec, Dx: any) => {
+    const ik = `${x}|${committed}|${refYear}`, hit = interpCache.get(Dx);
+    let im: InterpMap;
+    if (hit && hit.key === ik) im = hit.map; else { im = interpretSection(x, Dx, { query: committed ?? "", refYear, yearNow: YEAR_NOW, matched: store[keyOf(x)]?.matched ?? null }, cname); if (Dx && typeof Dx === "object") interpCache.set(Dx, { key: ik, map: im }); }
+    return (
+    <InterpContext.Provider value={im}>
       {x === "trend" && <Trend D={Dx} />}
       {x === "impact" && <Impact D={Dx} />}
       {x === "journal" && <Journal D={Dx} />}
@@ -134,8 +141,9 @@ export default function LlbDashboard({ initialQuery = "artificial intelligence",
       {x === "quality" && <Quality D={Dx} />}
       {x === "longitudinal" && <Longi D={Dx} />}
       {x === "cross" && <Cross D={Dx} refYear={refYear} setRefYear={setRefYear} />}
-    </>
-  );
+    </InterpContext.Provider>
+    );
+  };
 
   return (
     <div className="max-w-6xl space-y-4">
@@ -240,10 +248,10 @@ function Impact({ D }: { D: any }) {
     <Card title="분야 × 연도 FWCI 히트맵" sub="진할수록 세계 평균보다 많이 인용" wide><Heatmap rows={fields} cols={fy.map(String)} cell={26} rowW={190} lo={0} hi={3} values={fields.map((f) => fy.map((y) => D.fieldFwci.find((r: any) => r.field === f && r.year === y)?.f ?? 0))} fmt={(v) => v.toFixed(1)} /></Card>
     <Card title="인용 궤적 — 논문이 나이 들며 받는 누적 인용" sub={aging.length ? "출판 연도 코호트별 논문 1편당 평균 누적 인용(표본). 가로 = 출판 후 연수" : "표본이 작아 계산할 수 없습니다"} wide>{aging.length ? <LineChart series={aging} yFmt={(n) => n.toFixed(1)} /> : <Empty />}</Card>
     <Card title="핵심 문헌 추천" sub="점수 = 0.5×정규화 인용 백분위 + 0.3×FWCI(상한 20) + 0.2×로그 인용. 막대는 구성 요소(인용 백분위·FWCI·인용)" wide>
-      <div className="space-y-1.5">{D.keyPapers.map((p: any, i: number) => <div key={p.wid} className="flex items-center gap-3"><span className="text-white/30 w-5 text-[12px]">{i + 1}</span><div className="flex-1 min-w-0"><p className="text-[13px] text-white/80 truncate">{p.title}</p><p className="text-[11.5px] text-white/35 truncate">{p.author} · {p.journal} · {p.year} · 인용 {nf.format(p.cited)} · FWCI {p.f}</p></div>
+      <div className="space-y-1.5">{D.keyPapers.map((p: any, i: number) => <div key={p.wid} className="flex items-center gap-3"><span className="text-white/30 w-5 text-[12px]">{i + 1}</span><div className="flex-1 min-w-0"><p className="text-[13px] text-white/80 break-words">{p.title}</p><p className="text-[11.5px] text-white/35 break-words">{p.author} · {p.journal} · {p.year} · 인용 {nf.format(p.cited)} · FWCI {p.f}</p></div>
         <div className="w-40 h-3 rounded bg-white/[0.05] overflow-hidden flex">{p.parts.map((v: number, k: number) => <div key={k} style={{ width: `${(v / 1) * 100}%`, background: PAL[k] }} />)}</div><span className="w-10 text-right text-[12px] tabular-nums text-white/60">{p.score.toFixed(2)}</span></div>)}</div>
     </Card>
-    <Card title="인용 상위 20편" sub="롤리팝 차트: 점 위치 = 피인용 수, 보조 = 제1저자" wide><Lollipop labelW={330} items={D.topCited.map((p: any) => ({ label: `${p.title.slice(0, 70)} (${p.year})`, value: p.cited, sub: p.author }))} /></Card>
+    <Card title="인용 상위 20편" sub="롤리팝 차트: 점 위치 = 피인용 수, 보조 = 제1저자" wide><Lollipop labelW={330} items={D.topCited.map((p: any) => ({ label: `${p.title} (${p.year})`, value: p.cited, sub: p.author }))} /></Card>
   </>;
 }
 
@@ -254,7 +262,7 @@ function Journal({ D }: { D: any }) {
   const qCol: Record<string, string> = { Q1: "#4fa89f", Q2: "#b5c23c", Q3: "#d3a53f", Q4: "#d9706a" };
   return <>
     <div className="md:col-span-2"><Notice tone="warn"><b>JCR 지표 범위</b> — 이 검색 결과 {nf.format(cov.n)}편 중 JCR 지표가 있는 논문은 <b>{nf.format(cov.jcr)}편({share.toFixed(1)}%)</b>입니다(전체 DB 평균 약 31%). 아래의 JIF·사분위·범주 분석은 <b>값이 있는 논문까지만</b> 집계하며, <b>학술대회 논문·학위논문은 저널 지표 분석에서 빠집니다</b>. 편수·출판사·색인 DB 분석은 전체 논문을 씁니다.</Notice></div>
-    <CoverageWaffle D={D} /><Card title="논문 유형별 JCR 지표 보유 비율" sub="유형마다 저널 지표를 쓸 수 있는 정도" wide><div className="space-y-1">{D.byType.map((t: any) => <div key={t.type} className="flex items-center gap-2 text-[12.5px]"><span className="w-36 text-white/70 truncate">{t.type}</span><div className="flex-1 h-4 rounded bg-white/[0.04] overflow-hidden"><div className="h-full" style={{ width: `${pct(t.jcr, t.n)}%`, background: "#e8782e99" }} /></div><span className="w-44 text-right tabular-nums text-white/50">{nf.format(t.n)}편 중 {pct(t.jcr, t.n).toFixed(1)}%</span></div>)}</div></Card>
+    <CoverageWaffle D={D} /><Card title="논문 유형별 JCR 지표 보유 비율" sub="유형마다 저널 지표를 쓸 수 있는 정도" wide><div className="space-y-1">{D.byType.map((t: any) => <div key={t.type} className="flex items-center gap-2 text-[12.5px]"><span className="w-36 text-white/70 break-words">{t.type}</span><div className="flex-1 h-4 rounded bg-white/[0.04] overflow-hidden"><div className="h-full" style={{ width: `${pct(t.jcr, t.n)}%`, background: "#e8782e99" }} /></div><span className="w-44 text-right tabular-nums text-white/50">{nf.format(t.n)}편 중 {pct(t.jcr, t.n).toFixed(1)}%</span></div>)}</div></Card>
     <Card title="저널 순위 (편수)" sub="막대 = 편수, 보조 = 평균 JIF·사분위"><BarsH items={D.journals.slice(0, 20).map((j: any) => ({ label: j.journal, value: j.n, sub: j.jif ? `JIF ${j.jif.toFixed(1)} ${j.q}` : "JCR 없음", color: qCol[j.q] }))} /></Card>
     <Card title="저널 버블 — 편수 × JIF" sub="가로: 편수(로그), 세로: JIF(로그), 색: 사분위"><Scatter points={D.journals.filter((j: any) => j.jif > 0).map((j: any) => ({ x: j.n, y: j.jif, c: ["Q1", "Q2", "Q3", "Q4"].indexOf(j.q), label: `${j.journal} · ${j.n}편 · JIF ${j.jif.toFixed(1)} ${j.q}`, r: 3 + Math.min(10, Math.sqrt(j.c) / 40) }))} xLog yLog xLabel="논문 수" yLabel="JIF" colors={["#4fa89f", "#b5c23c", "#d3a53f", "#d9706a"]} legend={["Q1", "Q2", "Q3", "Q4"].map((q) => ({ name: q, color: qCol[q] }))} /></Card>
     <Card title="사분위 분포 (JCR 보유 논문)" sub="Q1 이 가장 높은 JIF 구간"><Donut items={D.quartiles.map((q: any) => ({ label: q.q || "?", value: q.n, color: qCol[q.q] }))} /></Card>
@@ -320,7 +328,7 @@ function TopicRs({ D }: { D: any }) {
     <Card title="학제성(Rao–Stirling) 개요" sub={`개념이 2개 이상인 ${nf.format(D.n)}편의 평균 다양성 ${D.mean.toFixed(2)} (0 = 한 분야, 1 에 가까울수록 서로 먼 개념을 섞음)`}><Columns data={D.hist.map((h: any) => ({ label: h.lo.toFixed(1), value: h.n }))} /></Card>
     <Card title="연도별 평균 학제성"><LineChart series={[{ name: "평균 RS", points: D.byYear.map((r: any) => ({ x: r.year, y: r.rs })) }]} yFmt={(n) => n.toFixed(2)} /></Card>
     <Card title="분야별 학제성 (높은 순)"><BarsH items={D.byField.map((f: any) => ({ label: f.field, value: f.rs, sub: `${f.n}편` }))} fmt={(n) => n.toFixed(2)} /></Card>
-    <Card title="가장 학제적인 논문 10편" sub="서로 먼 개념을 함께 쓴 논문"><div className="space-y-1.5">{D.top.map((p: any, i: number) => <div key={i}><p className="text-[12.5px] text-white/80 truncate">{p.title}</p><p className="text-[11.5px] text-white/35 truncate">RS {p.rs.toFixed(2)} · {p.year} · 인용 {nf.format(p.cited)} · {p.concepts.join(", ")}</p></div>)}</div></Card>
+    <Card title="가장 학제적인 논문 10편" sub="서로 먼 개념을 함께 쓴 논문"><div className="space-y-1.5">{D.top.map((p: any, i: number) => <div key={i}><p className="text-[12.5px] text-white/80 break-words">{p.title}</p><p className="text-[11.5px] text-white/35 break-words">RS {p.rs.toFixed(2)} · {p.year} · 인용 {nf.format(p.cited)} · {p.concepts.join(", ")}</p></div>)}</div></Card>
     <Card title="분야 간 유사도 히트맵" sub="분야별 개념 빈도 벡터의 코사인 유사도(1 = 같은 개념을 씀). 낮은 칸 = 서로 다른 분야" wide><Heatmap rows={D.fieldHeat.names} cols={D.fieldHeat.names} values={D.fieldHeat.m} lo={0} hi={1} cell={42} rowW={170} /></Card>
     <Card title="개념 거리 히트맵 (상위 24개 개념)" sub="가까운 개념이 이웃하도록 정렬. 진한 칸 = 거리가 먼 개념 쌍(1−동시출현 코사인)" wide><Heatmap rows={D.conceptHeat.names} cols={D.conceptHeat.names} values={D.conceptHeat.m} lo={0} hi={1} cell={26} rowW={170} fmt={(v) => v.toFixed(1)} /></Card>
   </>;
@@ -332,7 +340,7 @@ function TopicMap({ D }: { D: any }) {
     <Card title="토픽·초록 지도" sub={`상위 ${nf.format(D.docs)}편의 제목·초록(어휘 ${nf.format(D.vocab)}개)을 TF-IDF → 잠재 의미 분석(LSA) → k-means 로 묶고 상위 2개 주성분으로 배치했습니다. 가까운 점 = 비슷한 어휘. 점을 가리키면 제목이 보입니다.`} wide>
       <Scatter points={D.points.map((p: any) => ({ x: p.x, y: p.y, c: p.c, hi: hl === p.c, label: `[${p.c + 1}] ${p.title} (${p.year}, 인용 ${p.cited})`, r: hl == null ? 3 : hl === p.c ? 4 : 2 }))} height={380} xFmt={() => ""} yFmt={() => ""} />
     </Card>
-    <Card title="토픽(군집) 목록" sub="군집 이름을 가리키면 지도에서 강조됩니다" wide><div className="grid md:grid-cols-2 gap-2">{D.clusters.map((c: any) => <div key={c.id} onMouseEnter={() => setHl(c.id)} onMouseLeave={() => setHl(null)} className="p-3 rounded-xl bg-[#0d0f14] border border-white/[0.04]"><p className="text-[13.5px] text-white/90"><i className="inline-block w-3 h-3 rounded-full mr-1.5 align-middle" style={{ background: PAL[c.id % PAL.length] }} /><b>토픽 {c.id + 1}</b> <span className="text-white/35 text-[12px]">· {c.size}편 · 평균 {c.yearMean.toFixed(0)}년 · 평균 인용 {c.citedMean.toFixed(0)}</span></p><p className="text-[13px] text-[#7fd0c6] mt-0.5">{c.terms.join(" · ")}</p>{c.top.map((p: any, i: number) => <p key={i} className="text-[11.5px] text-white/45 truncate">▸ {p.title} ({p.year}, {nf.format(p.cited)})</p>)}</div>)}</div></Card>
+    <Card title="토픽(군집) 목록" sub="군집 이름을 가리키면 지도에서 강조됩니다" wide><div className="grid md:grid-cols-2 gap-2">{D.clusters.map((c: any) => <div key={c.id} onMouseEnter={() => setHl(c.id)} onMouseLeave={() => setHl(null)} className="p-3 rounded-xl bg-[#0d0f14] border border-white/[0.04]"><p className="text-[13.5px] text-white/90"><i className="inline-block w-3 h-3 rounded-full mr-1.5 align-middle" style={{ background: PAL[c.id % PAL.length] }} /><b>토픽 {c.id + 1}</b> <span className="text-white/35 text-[12px]">· {c.size}편 · 평균 {c.yearMean.toFixed(0)}년 · 평균 인용 {c.citedMean.toFixed(0)}</span></p><p className="text-[13px] text-[#7fd0c6] mt-0.5">{c.terms.join(" · ")}</p>{c.top.map((p: any, i: number) => <p key={i} className="text-[11.5px] text-white/45 break-words">▸ {p.title} ({p.year}, {nf.format(p.cited)})</p>)}</div>)}</div></Card>
   </>;
 }
 function TopicGap({ D }: { D: any }) {
@@ -385,7 +393,7 @@ function Model({ D }: { D: any }) {
     <Card title="인용에 영향을 주는 요인 (회귀)" sub={`종속변수 = log(1+피인용), 표본 ${nf.format(D.n)}편${D.sampled ? `(해시 1/${D.sampled})` : ""}, 설명력 R² = ${D.r2.toFixed(2)}. 연속 변수는 표준화(1 표준편차 변화당 효과), 점 = 계수, 선 = 95% 구간, 주황 = 인용 증가, 청색 = 감소, 회색 = 유의하지 않음`} wide><Forest rows={rows} />
       <p className="text-[12px] text-white/45 mt-2">영향이 큰 요인 상위 3: {strong.map((s: any) => `${s.label}(${s.coef > 0 ? "+" : ""}${s.coef.toFixed(2)})`).join(", ")}. 상관이지 인과가 아니며, ‘논문 나이’가 클수록 인용이 쌓이는 효과가 섞여 있습니다.</p></Card>
     <Card title="요인 간 상관" sub="피어슨 상관(−1 ~ 1)" wide><Heatmap rows={D.corr.names} cols={D.corr.names} values={D.corr.m} lo={-1} hi={1} scheme="div" cell={46} rowW={110} /></Card>
-    <Card title="기대보다 많이 인용된 논문 (회귀 잔차 상위 10)" sub="요인을 모두 고려하고도 예상보다 많이 인용된 고성과 논문"><div className="space-y-1.5">{D.outliers.map((o: any, i: number) => <div key={i}><p className="text-[12.5px] text-white/80 truncate">{o.title}</p><p className="text-[11.5px] text-white/35">{o.year} · 인용 {nf.format(o.cited)} · 잔차 +{o.residual.toFixed(2)}</p></div>)}</div></Card>
+    <Card title="기대보다 많이 인용된 논문 (회귀 잔차 상위 10)" sub="요인을 모두 고려하고도 예상보다 많이 인용된 고성과 논문"><div className="space-y-1.5">{D.outliers.map((o: any, i: number) => <div key={i}><p className="text-[12.5px] text-white/80 break-words">{o.title}</p><p className="text-[11.5px] text-white/35">{o.year} · 인용 {nf.format(o.cited)} · 잔차 +{o.residual.toFixed(2)}</p></div>)}</div></Card>
     <Card title="저널 군집 (편수·JIF·평균 인용·OA 비율)" sub="저널 200개를 k-means 4군집으로 묶어 상위 2개 주성분으로 배치. 점을 가리키면 저널명"><Scatter points={D.journals.map((j: any) => ({ x: j.x, y: j.y, c: j.k, label: `[군집 ${j.k + 1}] ${j.journal} · ${j.n}편 · JIF ${j.jif ? j.jif.toFixed(1) : "-"} · 평균 인용 ${j.c.toFixed(0)}`, r: 3 + Math.min(8, Math.sqrt(j.n)) }))} colors={cl} xFmt={() => ""} yFmt={() => ""} legend={[0, 1, 2, 3].map((k) => ({ name: `군집 ${k + 1}`, color: cl[k] }))} /></Card><ClusterRadar D={D} />
   </>;
 }
